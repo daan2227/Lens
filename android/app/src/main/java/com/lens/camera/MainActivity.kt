@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -75,6 +76,21 @@ private fun App() {
 
     LaunchedEffect(Unit) {
         launcher.launch(requiredPermissions)
+    }
+
+    // Only intercept the system back button when there's an in-app screen, dialog, or
+    // in-progress collage to return to; otherwise let it fall through to exit the app
+    // as usual on the root camera screen.
+    val hasBackTarget = state.viewerIndex >= 0 || state.cameraPickerOpen || state.editorOpen ||
+        state.galleryOpen || (state.mode == Mode.COLLAGE && state.collageShots.isNotEmpty())
+    BackHandler(enabled = hasBackTarget) {
+        when {
+            state.viewerIndex >= 0 -> viewModel.closeViewer()
+            state.cameraPickerOpen -> viewModel.closeCameraPicker()
+            state.editorOpen -> viewModel.cancelCollage()
+            state.galleryOpen -> viewModel.closeGallery()
+            state.mode == Mode.COLLAGE && state.collageShots.isNotEmpty() -> viewModel.cancelCollage()
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
