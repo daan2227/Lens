@@ -24,6 +24,8 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.extensions.ExtensionMode
 import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -121,13 +123,23 @@ class CameraController(private val context: Context) {
             it.surfaceProvider = previewView.surfaceProvider
         }
         val capture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                    .build()
+            )
             .build()
 
         val boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
         imageCapture = capture
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
+    }
+
+    /** Real hardware flash for the rear LED; a no-op (safely ignored) on cameras without one. */
+    fun setFlashMode(enabled: Boolean) {
+        imageCapture?.flashMode = if (enabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
     }
 
     fun focusAt(previewView: PreviewView, x: Float, y: Float) {

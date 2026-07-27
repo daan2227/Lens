@@ -30,7 +30,7 @@ data class AppUiState(
     val filterIndex: Int = 0,
     val pro: ProAdjust = ProAdjust(),
     val timerSeconds: Int = 0,
-    val flashSim: Boolean = false,
+    val flashEnabled: Boolean = false,
     val gridVisible: Boolean = true,
 
     // Camera hardware
@@ -54,6 +54,7 @@ data class AppUiState(
     val captures: List<Capture> = emptyList(),
     val countdownValue: Int? = null,
     val flashFxTick: Int = 0,
+    val flashHold: Boolean = false,
     val cameraReady: Boolean = false,
     val demoMode: Boolean = false,
     val editorOpen: Boolean = false,
@@ -97,9 +98,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updatePro(pro: ProAdjust) = _state.update { it.copy(pro = pro) }
 
-    fun toggleFlashSim() = _state.update {
-        val next = !it.flashSim
-        it.copy(flashSim = next, toast = str(if (next) R.string.toast_flash_on else R.string.toast_flash_off))
+    fun toggleFlash() = _state.update {
+        val next = !it.flashEnabled
+        it.copy(flashEnabled = next, toast = str(if (next) R.string.toast_flash_on else R.string.toast_flash_off))
     }
 
     fun cycleTimer() = _state.update {
@@ -208,8 +209,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             _state.update { it.copy(countdownValue = null) }
         }
-        if (_state.value.flashSim) {
-            _state.update { it.copy(flashFxTick = it.flashFxTick + 1) }
+        // Cameras with a physical flash unit get the real LED (wired via
+        // CameraController.setFlashMode); a quick screen flash is just visual feedback
+        // there. Cameras without one (front-facing) get no real flash hardware at all,
+        // so the screen itself is held bright through the capture to actually help.
+        val hasHardwareFlash = cameraController?.hasFlashUnit == true
+        if (_state.value.flashEnabled) {
+            if (hasHardwareFlash) {
+                _state.update { it.copy(flashFxTick = it.flashFxTick + 1) }
+            } else {
+                _state.update { it.copy(flashHold = true) }
+                delay(450)
+            }
         }
 
         val matrix = _state.value.activeColorMatrix
@@ -222,6 +233,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else {
             null
+        }
+        if (_state.value.flashHold) {
+            _state.update { it.copy(flashHold = false) }
         }
         if (bitmap == null) {
             _state.update { it.copy(toast = str(R.string.toast_capture_failed)) }

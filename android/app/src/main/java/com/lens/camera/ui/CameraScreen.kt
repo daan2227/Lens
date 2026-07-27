@@ -163,6 +163,9 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             cameraController.setManualIso(if (state.manualIsoEnabled) state.isoValue else null)
         }
     }
+    LaunchedEffect(state.flashEnabled, state.cameraReady) {
+        if (state.cameraReady) cameraController.setFlashMode(state.flashEnabled)
+    }
 
     var reticleOffset by remember { mutableStateOf<Offset?>(null) }
     var reticleTick by remember { mutableStateOf(0) }
@@ -240,7 +243,7 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
                 }
             }
 
-            FlashFx(tick = state.flashFxTick)
+            FlashFx(tick = state.flashFxTick, hold = state.flashHold)
         }
 
         BottomPanel(viewModel = viewModel, cameraController = cameraController)
@@ -260,10 +263,10 @@ private fun TopHud(viewModel: MainViewModel) {
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             HudButton(
-                icon = if (state.flashSim) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
-                active = state.flashSim,
+                icon = if (state.flashEnabled) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                active = state.flashEnabled,
                 contentDescription = stringResource(R.string.cd_flash),
-                onClick = { viewModel.toggleFlashSim() }
+                onClick = { viewModel.toggleFlash() }
             )
             HudButton(
                 icon = Icons.Filled.Timer,
@@ -391,12 +394,15 @@ private fun CollageProgressHud(total: Int, done: Int, modifier: Modifier = Modif
 }
 
 @Composable
-private fun FlashFx(tick: Int) {
+private fun FlashFx(tick: Int, hold: Boolean) {
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(tick) {
         if (tick == 0) return@LaunchedEffect
         alpha.snapTo(0.9f)
         alpha.animateTo(0f, tween(180))
+    }
+    LaunchedEffect(hold) {
+        if (hold) alpha.snapTo(1f) else if (alpha.value == 1f) alpha.animateTo(0f, tween(180))
     }
     if (alpha.value > 0f) {
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = alpha.value)))
