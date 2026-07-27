@@ -27,6 +27,12 @@
     <string name="cd_save">Guardar</string>
     <string name="cd_delete">Eliminar</string>
     <string name="cd_back">Volver</string>
+    <string name="cd_hdr">HDR</string>
+
+    <!-- Camera picker -->
+    <string name="camera_front">Frontal</string>
+    <string name="camera_back">Trasera</string>
+    <string name="camera_generic">Cámara</string>
 
     <!-- Toasts -->
     <string name="toast_flash_on">Flash activado</string>
@@ -44,6 +50,8 @@
     <string name="toast_deleted">Foto eliminada</string>
     <string name="toast_capture_failed">No se pudo capturar la foto</string>
     <string name="toast_frame_selected">Marco: %1$s</string>
+    <string name="toast_hdr_unsupported">HDR no disponible en esta cámara</string>
+    <string name="toast_iso_unsupported">Control manual de ISO no disponible en este dispositivo</string>
 
     <!-- Collage editor -->
     <string name="editor_title">EDITAR COLLAGE</string>
@@ -59,12 +67,16 @@
     <string name="viewer_save">Guardar</string>
     <string name="viewer_delete">Eliminar</string>
     <string name="viewer_close">Volver</string>
+    <string name="viewer_share">Compartir</string>
 
     <!-- PRO sliders -->
     <string name="pro_bri">BRI</string>
     <string name="pro_con">CON</string>
     <string name="pro_sat">SAT</string>
     <string name="pro_temp">TEMP</string>
+    <string name="pro_zoom">ZOOM</string>
+    <string name="pro_ev">EV</string>
+    <string name="pro_iso">ISO</string>
 
     <!-- Filters (order matches filters.FILTERS 1:1) -->
     <string-array name="filter_names">

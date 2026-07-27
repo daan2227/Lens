@@ -1,8 +1,10 @@
 package com.lens.camera.ui
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -103,6 +107,8 @@ fun GalleryScreen(viewModel: MainViewModel) {
 @Composable
 private fun ViewerDialog(viewModel: MainViewModel, capture: Capture) {
     val bitmap = remember(capture.id) { viewModel.loadCaptureBitmap(capture) }
+    val context = LocalContext.current
+    val shareLabel = stringResource(R.string.viewer_share)
 
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.96f)),
@@ -120,9 +126,23 @@ private fun ViewerDialog(viewModel: MainViewModel, capture: Capture) {
                     contentScale = ContentScale.Fit
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Button(onClick = { viewModel.exportToGallery(capture) }) {
                     Text(stringResource(R.string.viewer_save))
+                }
+                OutlinedButton(onClick = {
+                    val uri = viewModel.shareUri(capture)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, shareLabel))
+                }) {
+                    Text(shareLabel)
                 }
                 OutlinedButton(onClick = { viewModel.deleteCapture(capture) }) {
                     Text(stringResource(R.string.viewer_delete), color = MaterialTheme.colorScheme.error)

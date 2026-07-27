@@ -23,6 +23,11 @@
     <string name="cd_save">Save</string>
     <string name="cd_delete">Delete</string>
     <string name="cd_back">Back</string>
+    <string name="cd_hdr">HDR</string>
+
+    <string name="camera_front">Front</string>
+    <string name="camera_back">Back</string>
+    <string name="camera_generic">Camera</string>
 
     <string name="toast_flash_on">Flash on</string>
     <string name="toast_flash_off">Flash off</string>
@@ -39,6 +44,8 @@
     <string name="toast_deleted">Photo deleted</string>
     <string name="toast_capture_failed">Couldn\'t capture the photo</string>
     <string name="toast_frame_selected">Frame: %1$s</string>
+    <string name="toast_hdr_unsupported">HDR isn\'t available on this camera</string>
+    <string name="toast_iso_unsupported">Manual ISO isn\'t available on this device</string>
 
     <string name="editor_title">EDIT COLLAGE</string>
     <string name="editor_hint">Tap one photo, then another, to swap them</string>
@@ -52,11 +59,15 @@
     <string name="viewer_save">Save</string>
     <string name="viewer_delete">Delete</string>
     <string name="viewer_close">Back</string>
+    <string name="viewer_share">Share</string>
 
     <string name="pro_bri">BRI</string>
     <string name="pro_con">CON</string>
     <string name="pro_sat">SAT</string>
     <string name="pro_temp">TEMP</string>
+    <string name="pro_zoom">ZOOM</string>
+    <string name="pro_ev">EV</string>
+    <string name="pro_iso">ISO</string>
 
     <string-array name="filter_names">
         <item>Original</item>

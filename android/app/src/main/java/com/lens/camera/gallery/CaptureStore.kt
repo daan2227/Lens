@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 
@@ -67,4 +68,8 @@ class CaptureStore(private val context: Context) {
         }
         return uri
     }
+
+    /** A content:// Uri suitable for handing to a share Intent (readable by the receiving app only). */
+    fun shareUri(capture: Capture): Uri =
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", capture.file)
 }

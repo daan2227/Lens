@@ -3,6 +3,7 @@ package com.lens.camera
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,7 +32,22 @@ data class AppUiState(
     val timerSeconds: Int = 0,
     val flashSim: Boolean = false,
     val gridVisible: Boolean = true,
-    val lensFacing: Int = CameraSelector.LENS_FACING_FRONT,
+
+    // Camera hardware
+    val availableCameras: List<CameraInfo> = emptyList(),
+    val selectedCameraIndex: Int = 0,
+    val cameraPickerOpen: Boolean = false,
+    val zoomRatio: Float = 1f,
+    val zoomRange: ClosedFloatingPointRange<Float> = 1f..1f,
+    val exposureIndex: Int = 0,
+    val exposureRange: IntRange = 0..0,
+    val hdrEnabled: Boolean = false,
+    val hdrSupported: Boolean = false,
+    val manualIsoEnabled: Boolean = false,
+    val isoValue: Int = 100,
+    val isoRange: IntRange = 100..100,
+    val manualIsoSupported: Boolean = false,
+
     val layoutIndex: Int = 3,
     val frameIndex: Int = 0,
     val collageShots: List<Bitmap> = emptyList(),
@@ -49,6 +65,12 @@ data class AppUiState(
 ) {
     val activeColorMatrix
         get() = buildColorMatrix(FILTERS[filterIndex] + if (mode == Mode.PRO || !pro.isIdentity) pro.toOps() else emptyList())
+
+    val selectedCamera: CameraInfo?
+        get() = availableCameras.getOrNull(selectedCameraIndex)
+
+    val selectedCameraIsFront: Boolean
+        get() = selectedCamera?.lensFacing == CameraSelector.LENS_FACING_FRONT
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -88,11 +110,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleGrid() = _state.update { it.copy(gridVisible = !it.gridVisible) }
 
-    fun toggleFacing() = _state.update {
-        val next = if (it.lensFacing == CameraSelector.LENS_FACING_FRONT)
-            CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT
-        it.copy(lensFacing = next)
+    // ---- Camera hardware selection ----
+
+    /** Called once camera enumeration completes; keeps the current selection if already valid. */
+    fun setAvailableCameras(cameras: List<CameraInfo>) = _state.update {
+        if (it.availableCameras.isNotEmpty()) return@update it
+        val defaultIndex = cameras.indexOfFirst { c -> c.lensFacing == CameraSelector.LENS_FACING_FRONT }
+            .let { i -> if (i >= 0) i else 0 }
+        it.copy(availableCameras = cameras, selectedCameraIndex = defaultIndex)
     }
+
+    fun openCameraPicker() = _state.update { it.copy(cameraPickerOpen = true) }
+    fun closeCameraPicker() = _state.update { it.copy(cameraPickerOpen = false) }
+
+    fun selectCamera(index: Int) = _state.update {
+        it.copy(
+            selectedCameraIndex = index,
+            cameraPickerOpen = false,
+            zoomRatio = 1f,
+            exposureIndex = 0,
+            manualIsoEnabled = false
+        )
+    }
+
+    fun toggleFacing() = _state.update {
+        if (it.availableCameras.size < 2) return@update it
+        val currentFacing = it.selectedCamera?.lensFacing
+        val targetFacing = if (currentFacing == CameraSelector.LENS_FACING_FRONT)
+            CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT
+        val next = it.availableCameras.indexOfFirst { c -> c.lensFacing == targetFacing }
+        if (next < 0) return@update it
+        it.copy(selectedCameraIndex = next, zoomRatio = 1f, exposureIndex = 0, manualIsoEnabled = false)
+    }
+
+    fun setCameraCapabilities(
+        zoomRange: ClosedFloatingPointRange<Float>,
+        exposureRange: IntRange,
+        isoRange: IntRange,
+        manualIsoSupported: Boolean,
+        hdrSupported: Boolean
+    ) = _state.update {
+        it.copy(
+            zoomRange = zoomRange,
+            exposureRange = exposureRange,
+            isoRange = isoRange,
+            isoValue = isoRange.first + (isoRange.last - isoRange.first) / 2,
+            manualIsoSupported = manualIsoSupported,
+            hdrSupported = hdrSupported
+        )
+    }
+
+    fun setZoom(ratio: Float) = _state.update { it.copy(zoomRatio = ratio.coerceIn(it.zoomRange)) }
+
+    fun setExposure(index: Int) = _state.update {
+        it.copy(exposureIndex = index.coerceIn(it.exposureRange))
+    }
+
+    fun toggleHdr() = _state.update {
+        if (!it.hdrSupported) it.copy(toast = str(R.string.toast_hdr_unsupported))
+        else it.copy(hdrEnabled = !it.hdrEnabled)
+    }
+
+    fun toggleManualIso() = _state.update {
+        if (!it.manualIsoSupported) it.copy(toast = str(R.string.toast_iso_unsupported))
+        else it.copy(manualIsoEnabled = !it.manualIsoEnabled)
+    }
+
+    fun setIso(value: Int) = _state.update { it.copy(isoValue = value.coerceIn(it.isoRange)) }
 
     fun selectLayout(index: Int) = _state.update {
         it.copy(layoutIndex = index, collageShots = emptyList())
@@ -129,7 +213,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val matrix = _state.value.activeColorMatrix
-        val mirror = _state.value.lensFacing == CameraSelector.LENS_FACING_FRONT
+        val mirror = _state.value.selectedCameraIsFront
         val bitmap = if (cameraController != null && _state.value.cameraReady && !_state.value.demoMode) {
             try {
                 cameraController.capturePhoto(matrix, mirror)
@@ -241,6 +325,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (uri != null) _state.update { it.copy(toast = str(R.string.toast_saved_to_gallery)) }
         return uri
     }
+
+    fun shareUri(capture: Capture): Uri = captureStore.shareUri(capture)
 
     fun deleteCapture(capture: Capture) {
         captureStore.delete(capture)

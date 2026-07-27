@@ -3,6 +3,7 @@ package com.lens.camera.ui
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.view.View
+import androidx.camera.core.CameraSelector
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -15,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.HdrOn
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -93,16 +96,31 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
     val cameraController = remember { CameraController(context) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
-    LaunchedEffect(cameraPermissionGranted, state.lensFacing, previewView) {
+    LaunchedEffect(cameraPermissionGranted) {
+        if (cameraPermissionGranted) {
+            viewModel.setAvailableCameras(cameraController.availableCameras())
+        }
+    }
+
+    val selectedCamera = state.selectedCamera
+    LaunchedEffect(cameraPermissionGranted, selectedCamera, state.hdrEnabled, previewView) {
         val pv = previewView
-        if (!cameraPermissionGranted) {
+        if (!cameraPermissionGranted || selectedCamera == null) {
             viewModel.setCameraReady(ready = false, demo = true)
             return@LaunchedEffect
         }
         if (pv != null) {
             try {
-                cameraController.bind(pv, lifecycleOwner, state.lensFacing)
+                cameraController.bind(pv, lifecycleOwner, selectedCamera, state.hdrEnabled)
                 viewModel.setCameraReady(ready = true, demo = false)
+                val iso = cameraController.isoRange()
+                viewModel.setCameraCapabilities(
+                    zoomRange = cameraController.zoomRange(),
+                    exposureRange = cameraController.exposureRange(),
+                    isoRange = if (iso != null) iso.lower..iso.upper else 100..100,
+                    manualIsoSupported = cameraController.hasManualSensorControl(),
+                    hdrSupported = cameraController.isHdrSupported(selectedCamera)
+                )
             } catch (e: Exception) {
                 viewModel.setCameraReady(ready = false, demo = true)
             }
@@ -114,6 +132,18 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             View.LAYER_TYPE_HARDWARE,
             Paint().apply { colorFilter = ColorMatrixColorFilter(state.activeColorMatrix) }
         )
+    }
+
+    LaunchedEffect(state.zoomRatio, state.cameraReady) {
+        if (state.cameraReady) cameraController.setZoomRatio(state.zoomRatio)
+    }
+    LaunchedEffect(state.exposureIndex, state.cameraReady) {
+        if (state.cameraReady) cameraController.setExposureIndex(state.exposureIndex)
+    }
+    LaunchedEffect(state.manualIsoEnabled, state.isoValue, state.cameraReady) {
+        if (state.cameraReady) {
+            cameraController.setManualIso(if (state.manualIsoEnabled) state.isoValue else null)
+        }
     }
 
     var reticleOffset by remember { mutableStateOf<Offset?>(null) }
@@ -130,6 +160,12 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
                         previewView?.let { cameraController.focusAt(it, offset.x, offset.y) }
                         reticleOffset = offset
                         reticleTick++
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        val current = viewModel.state.value.zoomRatio
+                        viewModel.setZoom(current * zoom)
                     }
                 }
         ) {
@@ -164,6 +200,17 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
 
             HudData(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp))
 
+            if (state.zoomRange.endInclusive > state.zoomRange.start) {
+                ZoomIndicator(
+                    ratio = state.zoomRatio,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
+                )
+            }
+
+            if (state.cameraPickerOpen) {
+                CameraPickerDialog(viewModel)
+            }
+
             state.countdownValue?.let { value ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(value.toString(), color = Color.White, fontSize = 110.sp, fontWeight = FontWeight.Bold)
@@ -173,7 +220,7 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             FlashFx(tick = state.flashFxTick)
         }
 
-        BottomPanel(viewModel = viewModel)
+        BottomPanel(viewModel = viewModel, cameraController = cameraController)
     }
 }
 
@@ -203,12 +250,20 @@ private fun TopHud(viewModel: MainViewModel) {
             )
         }
         Text("LENS", color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 4.sp, fontSize = 14.sp)
-        HudButton(
-            icon = Icons.Filled.GridOn,
-            active = state.gridVisible,
-            contentDescription = stringResource(R.string.cd_grid),
-            onClick = { viewModel.toggleGrid() }
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HudButton(
+                icon = Icons.Filled.HdrOn,
+                active = state.hdrEnabled,
+                contentDescription = stringResource(R.string.cd_hdr),
+                onClick = { viewModel.toggleHdr() }
+            )
+            HudButton(
+                icon = Icons.Filled.GridOn,
+                active = state.gridVisible,
+                contentDescription = stringResource(R.string.cd_grid),
+                onClick = { viewModel.toggleGrid() }
+            )
+        }
     }
 }
 
@@ -326,6 +381,61 @@ private fun FlashFx(tick: Int) {
 }
 
 @Composable
+private fun ZoomIndicator(ratio: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .background(Color.Black.copy(alpha = .45f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Text(
+            String.format(Locale.US, "%.1f×", ratio),
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun CameraPickerDialog(viewModel: MainViewModel) {
+    val state by viewModel.state.collectAsState()
+    val frontLabel = stringResource(R.string.camera_front)
+    val backLabel = stringResource(R.string.camera_back)
+    val genericLabel = stringResource(R.string.camera_generic)
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f)).clickable { viewModel.closeCameraPicker() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            Modifier
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            state.availableCameras.forEachIndexed { i, info ->
+                val facing = info.lensFacing
+                val sameFacingBefore = state.availableCameras.take(i).count { it.lensFacing == facing }
+                val base = when (facing) {
+                    CameraSelector.LENS_FACING_FRONT -> frontLabel
+                    CameraSelector.LENS_FACING_BACK -> backLabel
+                    else -> genericLabel
+                }
+                val label = if (sameFacingBefore > 0) "$base ${sameFacingBefore + 1}" else base
+                Text(
+                    label,
+                    color = if (i == state.selectedCameraIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (i == state.selectedCameraIndex) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier
+                        .clickable { viewModel.selectCamera(i) }
+                        .padding(vertical = 10.dp, horizontal = 6.dp)
+                        .fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DemoScene(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "demo")
     val t by transition.animateFloat(
@@ -349,7 +459,7 @@ private fun DemoScene(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BottomPanel(viewModel: MainViewModel) {
+private fun BottomPanel(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
     Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.systemBars)) {
         if (state.mode == Mode.PRO) ProPanel(viewModel)
@@ -359,7 +469,7 @@ private fun BottomPanel(viewModel: MainViewModel) {
         } else {
             FiltersRow(viewModel)
         }
-        ShutterRow(viewModel)
+        ShutterRow(viewModel, cameraController)
         ModeSwitcher(viewModel)
     }
 }
@@ -417,16 +527,76 @@ private fun ProPanel(viewModel: MainViewModel) {
         ProRow(stringResource(R.string.pro_temp), state.pro.hueRotate, -40f, 40f, isPercent = false) {
             viewModel.updatePro(state.pro.copy(hueRotate = it))
         }
+
+        if (state.zoomRange.endInclusive > state.zoomRange.start) {
+            ProRow(
+                stringResource(R.string.pro_zoom),
+                state.zoomRatio,
+                state.zoomRange.start,
+                state.zoomRange.endInclusive,
+                isPercent = false,
+                suffix = "×"
+            ) { viewModel.setZoom(it) }
+        }
+
+        if (state.exposureRange.last > state.exposureRange.first) {
+            ProRow(
+                stringResource(R.string.pro_ev),
+                state.exposureIndex.toFloat(),
+                state.exposureRange.first.toFloat(),
+                state.exposureRange.last.toFloat(),
+                isPercent = false
+            ) { viewModel.setExposure(it.roundToInt()) }
+        }
+
+        if (state.manualIsoSupported) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.pro_iso),
+                    Modifier.weight(1f),
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                androidx.compose.material3.Switch(
+                    checked = state.manualIsoEnabled,
+                    onCheckedChange = { viewModel.toggleManualIso() }
+                )
+            }
+            if (state.manualIsoEnabled) {
+                ProRow(
+                    stringResource(R.string.pro_iso),
+                    state.isoValue.toFloat(),
+                    state.isoRange.first.toFloat(),
+                    state.isoRange.last.toFloat(),
+                    isPercent = false
+                ) { viewModel.setIso(it.roundToInt()) }
+            }
+        }
     }
 }
 
 @Composable
-private fun ProRow(label: String, value: Float, min: Float, max: Float, isPercent: Boolean, onChange: (Float) -> Unit) {
+private fun ProRow(
+    label: String,
+    value: Float,
+    min: Float,
+    max: Float,
+    isPercent: Boolean,
+    suffix: String = "",
+    onChange: (Float) -> Unit
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.width(34.dp), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(value = value, onValueChange = onChange, valueRange = min..max, modifier = Modifier.weight(1f))
-        val display = if (isPercent) (value * 100).roundToInt().toString() else value.roundToInt().toString()
-        Text(display, Modifier.width(38.dp), fontSize = 10.sp, textAlign = TextAlign.End)
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = if (max > min) min..max else min..(min + 0.001f),
+            modifier = Modifier.weight(1f)
+        )
+        val number = if (isPercent) (value * 100).roundToInt().toString() else {
+            if (suffix == "×") String.format(Locale.US, "%.1f", value) else value.roundToInt().toString()
+        }
+        Text("$number$suffix", Modifier.width(42.dp), fontSize = 10.sp, textAlign = TextAlign.End)
     }
 }
 
@@ -496,13 +666,12 @@ private fun LayoutsRow(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun ShutterRow(viewModel: MainViewModel) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun ShutterRow(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
     val thumb = remember(state.captures.firstOrNull()?.id) {
         state.captures.firstOrNull()?.let { viewModel.loadCaptureBitmap(it) }
     }
-    val context = LocalContext.current
-    val cameraController = remember { CameraController(context) }
 
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 2.dp),
@@ -545,7 +714,10 @@ private fun ShutterRow(viewModel: MainViewModel) {
             Modifier
                 .size(50.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                .clickable { viewModel.toggleFacing() },
+                .combinedClickable(
+                    onClick = { viewModel.toggleFacing() },
+                    onLongClick = { if (state.availableCameras.size > 2) viewModel.openCameraPicker() }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Filled.Cameraswitch, contentDescription = stringResource(R.string.cd_flip_camera))
