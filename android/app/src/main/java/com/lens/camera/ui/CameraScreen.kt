@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
@@ -34,16 +35,15 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GridOn
@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.HdrOn
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +58,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +75,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -231,7 +230,7 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             if (state.mode == Mode.PRO) {
                 ProPanel(
                     viewModel = viewModel,
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp)
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
                 )
             } else if (state.zoomRange.endInclusive > state.zoomRange.start) {
                 ZoomIndicator(
@@ -618,20 +617,14 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val genericLabel = stringResource(R.string.camera_generic)
 
     // Floats over the viewfinder as a self-contained overlay: it never takes part in
-    // the screen's layout, so opening a control never shrinks the camera preview. A
-    // vertical rail down the edge instead of a horizontal bar keeps it clear of the
-    // shutter/mode controls at the bottom and out of the way of the framed shot.
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        active?.let { control ->
-            ProControlPopup(control, viewModel, state)
-        }
-        Column(
+    // the screen's layout, so opening a control never shrinks the camera preview.
+    Column(modifier.widthIn(max = 460.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
             Modifier
-                .verticalScroll(rememberScrollState())
-                .glass(RoundedCornerShape(18.dp))
-                .padding(horizontal = 6.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             ProChip(
                 label = cameraChipLabel(state, frontLabel, backLabel, genericLabel),
@@ -694,6 +687,9 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onClick = { active = if (active == ProControl.TEMP) null else ProControl.TEMP }
             )
         }
+        active?.let { control ->
+            ProControlPopup(control, viewModel, state, onClose = { active = null })
+        }
     }
 }
 
@@ -717,6 +713,8 @@ private fun cameraChipLabel(state: AppUiState, front: String, back: String, gene
     }.uppercase()
 }
 
+/** Inactive chips are flat text (dim label, accent-colored value); the active one becomes
+ *  a solid pill, matching a typical pro-camera control strip. */
 @Composable
 private fun ProChip(
     label: String,
@@ -727,128 +725,192 @@ private fun ProChip(
 ) {
     Row(
         Modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(50))
             .then(
-                if (active) {
-                    Modifier
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = .24f), RoundedCornerShape(14.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .65f), RoundedCornerShape(14.dp))
-                } else {
-                    Modifier.glass(RoundedCornerShape(14.dp))
-                }
+                if (active) Modifier.background(MaterialTheme.colorScheme.primary) else Modifier
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = if (active) 12.dp else 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         icon?.let {
-            Icon(it, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White.copy(alpha = .85f))
+            Icon(
+                it,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+                tint = if (active) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = .85f)
+            )
         }
-        Text(label, fontSize = 9.sp, color = Color.White.copy(alpha = .7f), letterSpacing = 0.5.sp)
+        Text(
+            label,
+            fontSize = 10.sp,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            color = if (active) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = .65f),
+            letterSpacing = 0.5.sp
+        )
         value?.let {
-            Text(it, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(
+                it,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
 
 @Composable
-private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state: AppUiState) {
-    Box(
+private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state: AppUiState, onClose: () -> Unit) {
+    Row(
         Modifier
-            .width(210.dp)
-            .glass(RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .glass(RoundedCornerShape(24.dp))
+            .padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        when (control) {
-            ProControl.ZOOM -> MiniSlider(
-                state.zoomRatio, state.zoomRange.start, state.zoomRange.endInclusive,
-                display = String.format(Locale.US, "%.1f×", state.zoomRatio)
-            ) { viewModel.setZoom(it) }
+        val needsManualToggle = control == ProControl.ISO || control == ProControl.SHUTTER
+        if (needsManualToggle) {
+            ManualToggleChip(active = state.manualExposureEnabled, onClick = { viewModel.toggleManualExposure() })
+        }
+        Box(Modifier.weight(1f)) {
+            if (needsManualToggle && !state.manualExposureEnabled) {
+                Text(
+                    stringResource(R.string.pro_manual_hint),
+                    color = Color.White.copy(alpha = .55f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+            } else {
+                when (control) {
+                    ProControl.ZOOM -> RulerSlider(
+                        state.zoomRatio, state.zoomRange.start, state.zoomRange.endInclusive,
+                        display = String.format(Locale.US, "%.1f×", state.zoomRatio)
+                    ) { viewModel.setZoom(it) }
 
-            ProControl.EV -> MiniSlider(
-                state.exposureIndex.toFloat(), state.exposureRange.first.toFloat(), state.exposureRange.last.toFloat(),
-                display = state.exposureIndex.toString()
-            ) { viewModel.setExposure(it.roundToInt()) }
+                    ProControl.EV -> RulerSlider(
+                        state.exposureIndex.toFloat(), state.exposureRange.first.toFloat(), state.exposureRange.last.toFloat(),
+                        display = state.exposureIndex.toString()
+                    ) { viewModel.setExposure(it.roundToInt()) }
 
-            ProControl.ISO -> Column {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.pro_iso),
-                        Modifier.weight(1f),
-                        fontSize = 10.sp,
-                        color = Color.White.copy(alpha = .8f)
-                    )
-                    androidx.compose.material3.Switch(
-                        checked = state.manualExposureEnabled,
-                        onCheckedChange = { viewModel.toggleManualExposure() }
-                    )
-                }
-                if (state.manualExposureEnabled) {
-                    MiniSlider(
+                    ProControl.ISO -> RulerSlider(
                         state.isoValue.toFloat(), state.isoRange.first.toFloat(), state.isoRange.last.toFloat(),
                         display = state.isoValue.toString()
                     ) { viewModel.setIso(it.roundToInt()) }
+
+                    ProControl.SHUTTER -> {
+                        // Shutter speed spans several orders of magnitude (e.g. 1/10000s to
+                        // 10s), so the slider works in log space and converts back on change.
+                        val minLog = ln(state.shutterSpeedRange.first.toFloat())
+                        val maxLog = ln(state.shutterSpeedRange.last.toFloat())
+                        val valueLog = ln(state.shutterSpeedNs.toFloat())
+                        RulerSlider(
+                            valueLog, minLog, maxLog,
+                            display = formatShutterSpeed(state.shutterSpeedNs)
+                        ) { viewModel.setShutterSpeed(exp(it).toLong()) }
+                    }
+
+                    ProControl.BRI -> RulerSlider(
+                        state.pro.brightness, 0.5f, 1.6f, display = (state.pro.brightness * 100).roundToInt().toString()
+                    ) { viewModel.updatePro(state.pro.copy(brightness = it)) }
+
+                    ProControl.CON -> RulerSlider(
+                        state.pro.contrast, 0.5f, 1.8f, display = (state.pro.contrast * 100).roundToInt().toString()
+                    ) { viewModel.updatePro(state.pro.copy(contrast = it)) }
+
+                    ProControl.SAT -> RulerSlider(
+                        state.pro.saturate, 0f, 2.2f, display = (state.pro.saturate * 100).roundToInt().toString()
+                    ) { viewModel.updatePro(state.pro.copy(saturate = it)) }
+
+                    ProControl.TEMP -> RulerSlider(
+                        state.pro.hueRotate, -40f, 40f, display = state.pro.hueRotate.roundToInt().toString()
+                    ) { viewModel.updatePro(state.pro.copy(hueRotate = it)) }
+
+                    ProControl.CAMERA -> {}
                 }
             }
-
-            ProControl.SHUTTER -> Column {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.pro_shutter),
-                        Modifier.weight(1f),
-                        fontSize = 10.sp,
-                        color = Color.White.copy(alpha = .8f)
-                    )
-                    androidx.compose.material3.Switch(
-                        checked = state.manualExposureEnabled,
-                        onCheckedChange = { viewModel.toggleManualExposure() }
-                    )
-                }
-                if (state.manualExposureEnabled) {
-                    // Shutter speed spans several orders of magnitude (e.g. 1/10000s to
-                    // 10s), so the slider works in log space and converts back on change.
-                    val minLog = ln(state.shutterSpeedRange.first.toFloat())
-                    val maxLog = ln(state.shutterSpeedRange.last.toFloat())
-                    val valueLog = ln(state.shutterSpeedNs.toFloat())
-                    MiniSlider(
-                        valueLog, minLog, maxLog,
-                        display = formatShutterSpeed(state.shutterSpeedNs)
-                    ) { viewModel.setShutterSpeed(exp(it).toLong()) }
-                }
-            }
-
-            ProControl.BRI -> MiniSlider(
-                state.pro.brightness, 0.5f, 1.6f, display = (state.pro.brightness * 100).roundToInt().toString()
-            ) { viewModel.updatePro(state.pro.copy(brightness = it)) }
-
-            ProControl.CON -> MiniSlider(
-                state.pro.contrast, 0.5f, 1.8f, display = (state.pro.contrast * 100).roundToInt().toString()
-            ) { viewModel.updatePro(state.pro.copy(contrast = it)) }
-
-            ProControl.SAT -> MiniSlider(
-                state.pro.saturate, 0f, 2.2f, display = (state.pro.saturate * 100).roundToInt().toString()
-            ) { viewModel.updatePro(state.pro.copy(saturate = it)) }
-
-            ProControl.TEMP -> MiniSlider(
-                state.pro.hueRotate, -40f, 40f, display = state.pro.hueRotate.roundToInt().toString()
-            ) { viewModel.updatePro(state.pro.copy(hueRotate = it)) }
-
-            ProControl.CAMERA -> {}
         }
+        Icon(
+            Icons.Filled.Close,
+            contentDescription = stringResource(R.string.cd_close),
+            tint = Color.White,
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = .12f))
+                .clickable(onClick = onClose)
+                .padding(4.dp)
+        )
     }
 }
 
 @Composable
-private fun MiniSlider(value: Float, min: Float, max: Float, display: String, onChange: (Float) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = if (max > min) min..max else min..(min + 0.001f),
-            modifier = Modifier.weight(1f).height(28.dp)
+private fun ManualToggleChip(active: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (active) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .15f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            stringResource(R.string.pro_manual),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (active) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = .8f)
         )
-        Text(display, Modifier.width(40.dp), fontSize = 10.sp, color = Color.White, textAlign = TextAlign.End)
+    }
+}
+
+/**
+ * A horizontal ruler scrubber: drag left/right to change [value], rendered as tick marks
+ * streaming past a fixed center line with the current value shown large above it — the
+ * "wheel" style common in dedicated pro-camera apps, instead of a plain flat slider track.
+ */
+@Composable
+private fun RulerSlider(value: Float, min: Float, max: Float, display: String, onChange: (Float) -> Unit) {
+    val range = (max - min).coerceAtLeast(0.0001f)
+    val primary = MaterialTheme.colorScheme.primary
+    // pointerInput below is only keyed on (min, max), so it won't relaunch on every value
+    // change mid-drag — reading a plain captured `value` inside the gesture handler would
+    // go stale after the first onChange. rememberUpdatedState keeps it live instead.
+    val latestValue = rememberUpdatedState(value)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(display, color = primary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(34.dp)
+                .pointerInput(min, max) {
+                    // A full drag across the component's width covers a quarter of the
+                    // range — fine enough control without needing a huge swipe.
+                    val pxPerUnit = size.width / (range * 0.25f)
+                    detectHorizontalDragGestures { change, dragAmount ->
+                        change.consume()
+                        onChange((latestValue.value - dragAmount / pxPerUnit).coerceIn(min, max))
+                    }
+                }
+        ) {
+            val centerX = size.width / 2f
+            val pxPerUnit = size.width / (range * 0.25f)
+            val minorStep = range / 40f
+            for (i in -20..20) {
+                val tickValue = value + i * minorStep
+                if (tickValue < min || tickValue > max) continue
+                val x = centerX + i * minorStep * pxPerUnit
+                if (x < 0f || x > size.width) continue
+                val major = i % 5 == 0
+                val tickHeight = size.height * (if (major) 0.75f else 0.4f)
+                drawLine(
+                    color = if (i == 0) primary else Color.White.copy(alpha = if (major) 0.5f else 0.25f),
+                    start = Offset(x, size.height),
+                    end = Offset(x, size.height - tickHeight),
+                    strokeWidth = if (i == 0) 4f else 2f
+                )
+            }
+        }
     }
 }
 

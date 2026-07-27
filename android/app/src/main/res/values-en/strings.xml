@@ -78,7 +78,9 @@
     <string name="pro_zoom">ZOOM</string>
     <string name="pro_ev">EV</string>
     <string name="pro_iso">ISO</string>
-    <string name="pro_shutter">SS</string>
+    <string name="pro_shutter">SPD</string>
+    <string name="pro_manual">MANUAL</string>
+    <string name="pro_manual_hint">Turn on MANUAL to adjust</string>
 
     <string-array name="filter_names">
         <item>Original</item>
