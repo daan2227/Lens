@@ -22,7 +22,9 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Decode release signing keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        env:
+          HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
         run: |
           mkdir -p android/keystore
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keystore/lens-release.keystore
