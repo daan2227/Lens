@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
@@ -628,7 +627,6 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         }
         Column(
             Modifier
-                .heightIn(max = 380.dp)
                 .verticalScroll(rememberScrollState())
                 .glass(RoundedCornerShape(18.dp))
                 .padding(horizontal = 6.dp, vertical = 10.dp),

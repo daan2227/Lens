@@ -3,6 +3,7 @@ package com.lens.camera
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.lifecycle.AndroidViewModel
@@ -77,7 +78,7 @@ data class AppUiState(
     val toast: String? = null,
 
     val hyperlapseRecording: Boolean = false,
-    val hyperlapseIntervalMs: Long = 2000L,
+    val hyperlapseIntervalMs: Long = 1000L,
     val hyperlapseFrameCount: Int = 0
 ) {
     val activeColorMatrix
@@ -436,6 +437,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val frame = try {
                         cameraController.capturePhoto(matrix, mirror)
                     } catch (e: Exception) {
+                        Log.e("Hyperlapse", "Frame capture failed", e)
                         null
                     }
                     if (frame != null) {
@@ -453,6 +455,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } catch (e: Exception) {
                             // The encoder failed on this device (unsupported format/size/bitrate
                             // combo) — stop cleanly instead of crashing the recording loop.
+                            Log.e("Hyperlapse", "Encoding failed", e)
                             encodingFailed = true
                         }
                     }
