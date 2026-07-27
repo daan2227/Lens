@@ -1,7 +1,159 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LENS</string>
-    <string name="title_activity_main">LENS</string>
-    <string name="package_name">com.lens.camera</string>
-    <string name="custom_url_scheme">com.lens.camera</string>
+
+    <!-- Permissions -->
+    <string name="permission_camera_denied">Sin acceso a cámara — modo demo</string>
+
+    <!-- Modes -->
+    <string name="mode_photo">FOTO</string>
+    <string name="mode_collage">COLLAGE</string>
+    <string name="mode_pro">PRO</string>
+
+    <!-- HUD -->
+    <string name="hud_live">LIVE</string>
+    <string name="hud_iso">ISO 200</string>
+    <string name="hud_shutter">1/120</string>
+    <string name="hud_ev">EV</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_flash">Flash</string>
+    <string name="cd_timer">Temporizador</string>
+    <string name="cd_grid">Cuadrícula</string>
+    <string name="cd_flip_camera">Cambiar cámara</string>
+    <string name="cd_gallery">Galería</string>
+    <string name="cd_shutter">Capturar</string>
+    <string name="cd_close">Cerrar</string>
+    <string name="cd_save">Guardar</string>
+    <string name="cd_delete">Eliminar</string>
+    <string name="cd_back">Volver</string>
+
+    <!-- Toasts -->
+    <string name="toast_flash_on">Flash activado</string>
+    <string name="toast_flash_off">Flash desactivado</string>
+    <string name="toast_timer_set">Temporizador %1$ds</string>
+    <string name="toast_timer_off">Temporizador desactivado</string>
+    <string name="toast_capture">Foto capturada</string>
+    <string name="toast_collage_progress">Foto %1$d/%2$d</string>
+    <string name="toast_collage_saved">Collage guardado en galería</string>
+    <string name="toast_swapped">Fotos intercambiadas</string>
+    <string name="toast_pick_replace_first">Primero toca la foto a reemplazar</string>
+    <string name="toast_take_new_photo">Toma la nueva foto</string>
+    <string name="toast_photo_replaced">Foto reemplazada</string>
+    <string name="toast_saved_to_gallery">Guardada en la galería</string>
+    <string name="toast_deleted">Foto eliminada</string>
+    <string name="toast_capture_failed">No se pudo capturar la foto</string>
+    <string name="toast_frame_selected">Marco: %1$s</string>
+
+    <!-- Collage editor -->
+    <string name="editor_title">EDITAR COLLAGE</string>
+    <string name="editor_hint">Toca una foto y luego otra para intercambiarlas</string>
+    <string name="editor_replace">Reemplazar foto</string>
+    <string name="editor_save">Guardar</string>
+    <string name="editor_discard">Descartar</string>
+
+    <!-- Gallery -->
+    <string name="gallery_title">GALERÍA</string>
+    <string name="gallery_close">Cerrar</string>
+    <string name="gallery_empty">Aún no hay capturas.\nVuelve a la cámara y toma tu primera foto.</string>
+    <string name="viewer_save">Guardar</string>
+    <string name="viewer_delete">Eliminar</string>
+    <string name="viewer_close">Volver</string>
+
+    <!-- PRO sliders -->
+    <string name="pro_bri">BRI</string>
+    <string name="pro_con">CON</string>
+    <string name="pro_sat">SAT</string>
+    <string name="pro_temp">TEMP</string>
+
+    <!-- Filters (order matches filters.FILTERS 1:1) -->
+    <string-array name="filter_names">
+        <item>Original</item>
+        <item>Vívido</item>
+        <item>Noir</item>
+        <item>Retro</item>
+        <item>Frío</item>
+        <item>Cálido</item>
+        <item>Cine</item>
+        <item>Neón</item>
+        <item>Bruma</item>
+        <item>Sombra</item>
+        <item>Plata</item>
+        <item>Carbón</item>
+        <item>Sepia</item>
+        <item>Dorado</item>
+        <item>Rosa</item>
+        <item>Lavanda</item>
+        <item>Esmeralda</item>
+        <item>Océano</item>
+        <item>Atardecer</item>
+        <item>Amanecer</item>
+        <item>Polar</item>
+        <item>Desierto</item>
+        <item>Tropical</item>
+        <item>Vintage</item>
+        <item>Polaroid</item>
+        <item>Lomo</item>
+        <item>Cromo</item>
+        <item>Fade</item>
+        <item>Drama</item>
+        <item>Punk</item>
+        <item>Infrarrojo</item>
+        <item>Ácido</item>
+        <item>Púrpura</item>
+        <item>Miel</item>
+        <item>Nocturno</item>
+        <item>Niebla</item>
+        <item>Escarcha</item>
+        <item>Fuego</item>
+    </string-array>
+
+    <!-- Collage layouts (order matches collage.LAYOUTS 1:1) -->
+    <string-array name="layout_names">
+        <item>2V</item>
+        <item>2H</item>
+        <item>3T</item>
+        <item>4G</item>
+        <item>1+2</item>
+        <item>2+1</item>
+        <item>L3</item>
+        <item>6G</item>
+    </string-array>
+
+    <!-- Frames (order matches frames.FRAMES 1:1) -->
+    <string-array name="frame_names">
+        <item>Ninguno</item>
+        <item>Amor</item>
+        <item>Halloween</item>
+        <item>Navidad</item>
+        <item>4 Julio</item>
+        <item>Independencia</item>
+        <item>Cumpleaños</item>
+        <item>Año Nuevo</item>
+        <item>Boda</item>
+        <item>Graduación</item>
+        <item>Bebé</item>
+        <item>Verano</item>
+        <item>Día Madres</item>
+        <item>San Valentín</item>
+        <item>Fiesta</item>
+    </string-array>
+
+    <string-array name="frame_banners">
+        <item></item>
+        <item>CON AMOR</item>
+        <item>HALLOWEEN</item>
+        <item>FELIZ NAVIDAD</item>
+        <item>JULY 4TH</item>
+        <item>¡VIVA!</item>
+        <item>FELIZ CUMPLE</item>
+        <item>AÑO NUEVO</item>
+        <item>SÍ, ACEPTO</item>
+        <item>GRADUACIÓN</item>
+        <item>BIENVENIDO</item>
+        <item>VERANO</item>
+        <item>TE AMO MAMÁ</item>
+        <item>BE MINE</item>
+        <item>PARTY</item>
+    </string-array>
 </resources>

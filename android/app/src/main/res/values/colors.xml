@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Day palette (default / notnight) -->
+    <color name="lens_bg">#F5F5F2</color>
+    <color name="lens_panel">#FFFFFF</color>
+    <color name="lens_panel2">#ECECE7</color>
+    <color name="lens_ink">#17171B</color>
+    <color name="lens_mut">#6B6B73</color>
+    <color name="lens_accent">#FFD54A</color>
+    <color name="lens_rec">#E5484D</color>
+    <color name="lens_viewfinder">#000000</color>
+
+    <color name="ic_launcher_background">#060608</color>
+</resources>

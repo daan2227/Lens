@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LENS</string>
+
+    <string name="permission_camera_denied">No camera access — demo mode</string>
+
+    <string name="mode_photo">PHOTO</string>
+    <string name="mode_collage">COLLAGE</string>
+    <string name="mode_pro">PRO</string>
+
+    <string name="hud_live">LIVE</string>
+    <string name="hud_iso">ISO 200</string>
+    <string name="hud_shutter">1/120</string>
+    <string name="hud_ev">EV</string>
+
+    <string name="cd_flash">Flash</string>
+    <string name="cd_timer">Timer</string>
+    <string name="cd_grid">Grid</string>
+    <string name="cd_flip_camera">Switch camera</string>
+    <string name="cd_gallery">Gallery</string>
+    <string name="cd_shutter">Capture</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_save">Save</string>
+    <string name="cd_delete">Delete</string>
+    <string name="cd_back">Back</string>
+
+    <string name="toast_flash_on">Flash on</string>
+    <string name="toast_flash_off">Flash off</string>
+    <string name="toast_timer_set">Timer %1$ds</string>
+    <string name="toast_timer_off">Timer off</string>
+    <string name="toast_capture">Photo captured</string>
+    <string name="toast_collage_progress">Photo %1$d/%2$d</string>
+    <string name="toast_collage_saved">Collage saved to gallery</string>
+    <string name="toast_swapped">Photos swapped</string>
+    <string name="toast_pick_replace_first">Tap the photo to replace first</string>
+    <string name="toast_take_new_photo">Take the new photo</string>
+    <string name="toast_photo_replaced">Photo replaced</string>
+    <string name="toast_saved_to_gallery">Saved to gallery</string>
+    <string name="toast_deleted">Photo deleted</string>
+    <string name="toast_capture_failed">Couldn\'t capture the photo</string>
+    <string name="toast_frame_selected">Frame: %1$s</string>
+
+    <string name="editor_title">EDIT COLLAGE</string>
+    <string name="editor_hint">Tap one photo, then another, to swap them</string>
+    <string name="editor_replace">Replace photo</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_discard">Discard</string>
+
+    <string name="gallery_title">GALLERY</string>
+    <string name="gallery_close">Close</string>
+    <string name="gallery_empty">No captures yet.\nGo back to the camera and take your first photo.</string>
+    <string name="viewer_save">Save</string>
+    <string name="viewer_delete">Delete</string>
+    <string name="viewer_close">Back</string>
+
+    <string name="pro_bri">BRI</string>
+    <string name="pro_con">CON</string>
+    <string name="pro_sat">SAT</string>
+    <string name="pro_temp">TEMP</string>
+
+    <string-array name="filter_names">
+        <item>Original</item>
+        <item>Vivid</item>
+        <item>Noir</item>
+        <item>Retro</item>
+        <item>Cool</item>
+        <item>Warm</item>
+        <item>Cinema</item>
+        <item>Neon</item>
+        <item>Mist</item>
+        <item>Shadow</item>
+        <item>Silver</item>
+        <item>Charcoal</item>
+        <item>Sepia</item>
+        <item>Golden</item>
+        <item>Pink</item>
+        <item>Lavender</item>
+        <item>Emerald</item>
+        <item>Ocean</item>
+        <item>Sunset</item>
+        <item>Sunrise</item>
+        <item>Polar</item>
+        <item>Desert</item>
+        <item>Tropical</item>
+        <item>Vintage</item>
+        <item>Polaroid</item>
+        <item>Lomo</item>
+        <item>Chrome</item>
+        <item>Fade</item>
+        <item>Drama</item>
+        <item>Punk</item>
+        <item>Infrared</item>
+        <item>Acid</item>
+        <item>Purple</item>
+        <item>Honey</item>
+        <item>Nocturnal</item>
+        <item>Fog</item>
+        <item>Frost</item>
+        <item>Fire</item>
+    </string-array>
+
+    <string-array name="layout_names">
+        <item>2V</item>
+        <item>2H</item>
+        <item>3T</item>
+        <item>4G</item>
+        <item>1+2</item>
+        <item>2+1</item>
+        <item>L3</item>
+        <item>6G</item>
+    </string-array>
+
+    <string-array name="frame_names">
+        <item>None</item>
+        <item>Love</item>
+        <item>Halloween</item>
+        <item>Christmas</item>
+        <item>July 4th</item>
+        <item>Independence</item>
+        <item>Birthday</item>
+        <item>New Year</item>
+        <item>Wedding</item>
+        <item>Graduation</item>
+        <item>Baby</item>
+        <item>Summer</item>
+        <item>Mother\'s Day</item>
+        <item>Valentine\'s</item>
+        <item>Party</item>
+    </string-array>
+
+    <string-array name="frame_banners">
+        <item></item>
+        <item>WITH LOVE</item>
+        <item>HALLOWEEN</item>
+        <item>MERRY CHRISTMAS</item>
+        <item>JULY 4TH</item>
+        <item>VIVA!</item>
+        <item>HAPPY BIRTHDAY</item>
+        <item>HAPPY NEW YEAR</item>
+        <item>I DO</item>
+        <item>GRADUATION</item>
+        <item>WELCOME</item>
+        <item>SUMMER</item>
+        <item>LOVE YOU MOM</item>
+        <item>BE MINE</item>
+        <item>PARTY</item>
+    </string-array>
+</resources>
