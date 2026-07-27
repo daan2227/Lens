@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.lens.camera.AppUiState
 import com.lens.camera.MainViewModel
 import com.lens.camera.Mode
 import com.lens.camera.R
@@ -514,92 +516,201 @@ private fun FiltersRow(viewModel: MainViewModel) {
     }
 }
 
+private enum class ProControl { CAMERA, ZOOM, EV, ISO, BRI, CON, SAT, TEMP }
+
 @Composable
 private fun ProPanel(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsState()
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
-        ProRow(stringResource(R.string.pro_bri), state.pro.brightness, 0.5f, 1.6f, isPercent = true) {
-            viewModel.updatePro(state.pro.copy(brightness = it))
-        }
-        ProRow(stringResource(R.string.pro_con), state.pro.contrast, 0.5f, 1.8f, isPercent = true) {
-            viewModel.updatePro(state.pro.copy(contrast = it))
-        }
-        ProRow(stringResource(R.string.pro_sat), state.pro.saturate, 0f, 2.2f, isPercent = true) {
-            viewModel.updatePro(state.pro.copy(saturate = it))
-        }
-        ProRow(stringResource(R.string.pro_temp), state.pro.hueRotate, -40f, 40f, isPercent = false) {
-            viewModel.updatePro(state.pro.copy(hueRotate = it))
-        }
+    var active by remember { mutableStateOf<ProControl?>(null) }
+    val frontLabel = stringResource(R.string.camera_front)
+    val backLabel = stringResource(R.string.camera_back)
+    val genericLabel = stringResource(R.string.camera_generic)
 
-        if (state.zoomRange.endInclusive > state.zoomRange.start) {
-            ProRow(
-                stringResource(R.string.pro_zoom),
-                state.zoomRatio,
-                state.zoomRange.start,
-                state.zoomRange.endInclusive,
-                isPercent = false,
-                suffix = "×"
-            ) { viewModel.setZoom(it) }
+    Column(Modifier.fillMaxWidth()) {
+        active?.let { control ->
+            ProControlPopup(control, viewModel, state)
         }
-
-        if (state.exposureRange.last > state.exposureRange.first) {
-            ProRow(
-                stringResource(R.string.pro_ev),
-                state.exposureIndex.toFloat(),
-                state.exposureRange.first.toFloat(),
-                state.exposureRange.last.toFloat(),
-                isPercent = false
-            ) { viewModel.setExposure(it.roundToInt()) }
-        }
-
-        if (state.manualIsoSupported) {
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.pro_iso),
-                    Modifier.weight(1f),
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                androidx.compose.material3.Switch(
-                    checked = state.manualIsoEnabled,
-                    onCheckedChange = { viewModel.toggleManualIso() }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProChip(
+                label = cameraChipLabel(state, frontLabel, backLabel, genericLabel),
+                icon = Icons.Filled.Cameraswitch,
+                active = false,
+                onClick = { viewModel.openCameraPicker() }
+            )
+            if (state.zoomRange.endInclusive > state.zoomRange.start) {
+                ProChip(
+                    label = stringResource(R.string.pro_zoom),
+                    value = String.format(Locale.US, "%.1f×", state.zoomRatio),
+                    active = active == ProControl.ZOOM,
+                    onClick = { active = if (active == ProControl.ZOOM) null else ProControl.ZOOM }
                 )
             }
-            if (state.manualIsoEnabled) {
-                ProRow(
-                    stringResource(R.string.pro_iso),
-                    state.isoValue.toFloat(),
-                    state.isoRange.first.toFloat(),
-                    state.isoRange.last.toFloat(),
-                    isPercent = false
-                ) { viewModel.setIso(it.roundToInt()) }
+            if (state.exposureRange.last > state.exposureRange.first) {
+                ProChip(
+                    label = stringResource(R.string.pro_ev),
+                    value = state.exposureIndex.toString(),
+                    active = active == ProControl.EV,
+                    onClick = { active = if (active == ProControl.EV) null else ProControl.EV }
+                )
             }
+            if (state.manualIsoSupported) {
+                ProChip(
+                    label = stringResource(R.string.pro_iso),
+                    value = if (state.manualIsoEnabled) state.isoValue.toString() else "AUTO",
+                    active = active == ProControl.ISO,
+                    onClick = { active = if (active == ProControl.ISO) null else ProControl.ISO }
+                )
+            }
+            ProChip(
+                label = stringResource(R.string.pro_bri),
+                value = (state.pro.brightness * 100).roundToInt().toString(),
+                active = active == ProControl.BRI,
+                onClick = { active = if (active == ProControl.BRI) null else ProControl.BRI }
+            )
+            ProChip(
+                label = stringResource(R.string.pro_con),
+                value = (state.pro.contrast * 100).roundToInt().toString(),
+                active = active == ProControl.CON,
+                onClick = { active = if (active == ProControl.CON) null else ProControl.CON }
+            )
+            ProChip(
+                label = stringResource(R.string.pro_sat),
+                value = (state.pro.saturate * 100).roundToInt().toString(),
+                active = active == ProControl.SAT,
+                onClick = { active = if (active == ProControl.SAT) null else ProControl.SAT }
+            )
+            ProChip(
+                label = stringResource(R.string.pro_temp),
+                value = state.pro.hueRotate.roundToInt().toString(),
+                active = active == ProControl.TEMP,
+                onClick = { active = if (active == ProControl.TEMP) null else ProControl.TEMP }
+            )
+        }
+    }
+}
+
+private fun cameraChipLabel(state: AppUiState, front: String, back: String, generic: String): String {
+    val facing = state.selectedCamera?.lensFacing
+    return when (facing) {
+        CameraSelector.LENS_FACING_FRONT -> front
+        CameraSelector.LENS_FACING_BACK -> back
+        else -> generic
+    }.uppercase()
+}
+
+@Composable
+private fun ProChip(
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    value: String? = null,
+    icon: ImageVector? = null
+) {
+    Row(
+        Modifier
+            .background(
+                if (active) MaterialTheme.colorScheme.primary.copy(alpha = .22f) else Color.Black.copy(alpha = .28f),
+                RoundedCornerShape(14.dp)
+            )
+            .border(
+                1.dp,
+                if (active) MaterialTheme.colorScheme.primary.copy(alpha = .6f) else Color.White.copy(alpha = .12f),
+                RoundedCornerShape(14.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        icon?.let {
+            Icon(it, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White.copy(alpha = .85f))
+        }
+        Text(label, fontSize = 9.sp, color = Color.White.copy(alpha = .7f), letterSpacing = 0.5.sp)
+        value?.let {
+            Text(it, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Medium)
         }
     }
 }
 
 @Composable
-private fun ProRow(
-    label: String,
-    value: Float,
-    min: Float,
-    max: Float,
-    isPercent: Boolean,
-    suffix: String = "",
-    onChange: (Float) -> Unit
-) {
+private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state: AppUiState) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .background(Color.Black.copy(alpha = .55f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        when (control) {
+            ProControl.ZOOM -> MiniSlider(
+                state.zoomRatio, state.zoomRange.start, state.zoomRange.endInclusive,
+                display = String.format(Locale.US, "%.1f×", state.zoomRatio)
+            ) { viewModel.setZoom(it) }
+
+            ProControl.EV -> MiniSlider(
+                state.exposureIndex.toFloat(), state.exposureRange.first.toFloat(), state.exposureRange.last.toFloat(),
+                display = state.exposureIndex.toString()
+            ) { viewModel.setExposure(it.roundToInt()) }
+
+            ProControl.ISO -> Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.pro_iso),
+                        Modifier.weight(1f),
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = .8f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = state.manualIsoEnabled,
+                        onCheckedChange = { viewModel.toggleManualIso() }
+                    )
+                }
+                if (state.manualIsoEnabled) {
+                    MiniSlider(
+                        state.isoValue.toFloat(), state.isoRange.first.toFloat(), state.isoRange.last.toFloat(),
+                        display = state.isoValue.toString()
+                    ) { viewModel.setIso(it.roundToInt()) }
+                }
+            }
+
+            ProControl.BRI -> MiniSlider(
+                state.pro.brightness, 0.5f, 1.6f, display = (state.pro.brightness * 100).roundToInt().toString()
+            ) { viewModel.updatePro(state.pro.copy(brightness = it)) }
+
+            ProControl.CON -> MiniSlider(
+                state.pro.contrast, 0.5f, 1.8f, display = (state.pro.contrast * 100).roundToInt().toString()
+            ) { viewModel.updatePro(state.pro.copy(contrast = it)) }
+
+            ProControl.SAT -> MiniSlider(
+                state.pro.saturate, 0f, 2.2f, display = (state.pro.saturate * 100).roundToInt().toString()
+            ) { viewModel.updatePro(state.pro.copy(saturate = it)) }
+
+            ProControl.TEMP -> MiniSlider(
+                state.pro.hueRotate, -40f, 40f, display = state.pro.hueRotate.roundToInt().toString()
+            ) { viewModel.updatePro(state.pro.copy(hueRotate = it)) }
+
+            ProControl.CAMERA -> {}
+        }
+    }
+}
+
+@Composable
+private fun MiniSlider(value: Float, min: Float, max: Float, display: String, onChange: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(34.dp), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
             value = value,
             onValueChange = onChange,
             valueRange = if (max > min) min..max else min..(min + 0.001f),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).height(28.dp)
         )
-        val number = if (isPercent) (value * 100).roundToInt().toString() else {
-            if (suffix == "×") String.format(Locale.US, "%.1f", value) else value.roundToInt().toString()
-        }
-        Text("$number$suffix", Modifier.width(42.dp), fontSize = 10.sp, textAlign = TextAlign.End)
+        Text(display, Modifier.width(40.dp), fontSize = 10.sp, color = Color.White, textAlign = TextAlign.End)
     }
 }
 
