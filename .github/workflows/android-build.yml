@@ -2,7 +2,6 @@ name: Build Android APK & AAB
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
