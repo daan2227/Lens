@@ -50,7 +50,8 @@
     <string name="toast_deleted">Foto eliminada</string>
     <string name="toast_capture_failed">No se pudo capturar la foto</string>
     <string name="toast_frame_selected">Marco: %1$s</string>
-    <string name="toast_hdr_unsupported">HDR no disponible en esta cámara</string>
+    <string name="toast_hdr_on">HDR activado</string>
+    <string name="toast_hdr_off">HDR desactivado</string>
     <string name="toast_iso_unsupported">Control manual de ISO no disponible en este dispositivo</string>
 
     <!-- Collage editor -->

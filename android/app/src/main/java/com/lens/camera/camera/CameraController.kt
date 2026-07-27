@@ -32,11 +32,14 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.exp
+import kotlin.math.roundToInt
 
 /** Rough hardware specs for a camera, used to tell same-facing lenses apart in the picker. */
 data class CameraSpecs(val megapixels: Int?, val focalLengthMm: Float?)
@@ -137,9 +140,24 @@ class CameraController(private val context: Context) {
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
     }
 
-    /** Real hardware flash for the rear LED; a no-op (safely ignored) on cameras without one. */
-    fun setFlashMode(enabled: Boolean) {
-        imageCapture?.flashMode = if (enabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+    /**
+     * Forces the physical LED on/off via torch instead of relying on ImageCapture's
+     * AE-precapture flash handshake, which several devices (notably some Samsung models)
+     * silently fail to trigger. Torch is a direct hardware control, so it's a much more
+     * reliable way to guarantee the LED actually lights during a still capture.
+     */
+    suspend fun setTorch(enabled: Boolean) {
+        val control = camera?.cameraControl ?: return
+        try {
+            suspendCancellableCoroutine<Unit> { cont ->
+                val future = control.enableTorch(enabled)
+                future.addListener({
+                    if (cont.isActive) cont.resume(Unit)
+                }, mainExecutor)
+            }
+        } catch (e: Exception) {
+            // Torch unsupported or camera unbound mid-request; safe to ignore.
+        }
     }
 
     fun focusAt(previewView: PreviewView, x: Float, y: Float) {
@@ -221,7 +239,36 @@ class CameraController(private val context: Context) {
 
     // ---- Capture ----
 
-    suspend fun capturePhoto(colorMatrix: ColorMatrix, mirror: Boolean): Bitmap {
+    suspend fun capturePhoto(colorMatrix: ColorMatrix, mirror: Boolean): Bitmap =
+        applyFilter(captureOrientedFrame(mirror), colorMatrix)
+
+    /**
+     * Manual HDR fallback for cameras without a vendor CameraX Extension: brackets a dark
+     * and a bright exposure around the current exposure compensation and fuses them with a
+     * per-pixel well-exposedness weighting (simplified exposure fusion, Mertens et al.),
+     * so the HDR toggle does something real even without OEM extension support.
+     */
+    suspend fun captureHdrPhoto(colorMatrix: ColorMatrix, mirror: Boolean): Bitmap {
+        val range = exposureRange()
+        if (range.first == range.last) return capturePhoto(colorMatrix, mirror)
+
+        val originalIndex = camera?.cameraInfo?.exposureState?.exposureCompensationIndex ?: 0
+        try {
+            setExposureIndex(range.first)
+            delay(250)
+            val dark = captureOrientedFrame(mirror)
+
+            setExposureIndex(range.last)
+            delay(250)
+            val bright = captureOrientedFrame(mirror)
+
+            return applyFilter(fuseExposures(dark, bright), colorMatrix)
+        } finally {
+            setExposureIndex(originalIndex)
+        }
+    }
+
+    private suspend fun captureOrientedFrame(mirror: Boolean): Bitmap {
         val capture = imageCapture ?: error("Camera not bound")
         val proxy = suspendCancellableCoroutine<ImageProxy> { cont ->
             capture.takePicture(mainExecutor, object : ImageCapture.OnImageCapturedCallback() {
@@ -234,10 +281,10 @@ class CameraController(private val context: Context) {
                 }
             })
         }
-        return proxy.use { decodeAndProcess(it, colorMatrix, mirror) }
+        return proxy.use { decodeOriented(it, mirror) }
     }
 
-    private fun decodeAndProcess(proxy: ImageProxy, colorMatrix: ColorMatrix, mirror: Boolean): Bitmap {
+    private fun decodeOriented(proxy: ImageProxy, mirror: Boolean): Bitmap {
         val buffer = proxy.planes[0].buffer
         val bytes = ByteArray(buffer.remaining())
         buffer.get(bytes)
@@ -248,19 +295,64 @@ class CameraController(private val context: Context) {
         if (rotation != 0) matrix.postRotate(rotation.toFloat())
         if (mirror) matrix.postScale(-1f, 1f)
 
-        val oriented = if (matrix.isIdentity) {
+        return if (matrix.isIdentity) {
             rawBitmap
         } else {
             Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
         }
+    }
 
-        val filtered = Bitmap.createBitmap(oriented.width, oriented.height, Bitmap.Config.ARGB_8888)
+    private fun applyFilter(bitmap: Bitmap, colorMatrix: ColorMatrix): Bitmap {
+        val filtered = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(filtered)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(colorMatrix)
         }
-        canvas.drawBitmap(oriented, 0f, 0f, paint)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
         return filtered
+    }
+
+    private fun fuseExposures(dark: Bitmap, bright: Bitmap): Bitmap {
+        val w = dark.width
+        val h = dark.height
+        if (bright.width != w || bright.height != h) return bright
+
+        val darkPixels = IntArray(w * h)
+        val brightPixels = IntArray(w * h)
+        dark.getPixels(darkPixels, 0, w, 0, 0, w, h)
+        bright.getPixels(brightPixels, 0, w, 0, 0, w, h)
+
+        val out = IntArray(w * h)
+        for (i in darkPixels.indices) {
+            val d = darkPixels[i]
+            val b = brightPixels[i]
+            val dr = (d shr 16) and 0xFF
+            val dg = (d shr 8) and 0xFF
+            val db = d and 0xFF
+            val br = (b shr 16) and 0xFF
+            val bg = (b shr 8) and 0xFF
+            val bb = b and 0xFF
+
+            val wd = wellExposedWeight(dr, dg, db)
+            val wb = wellExposedWeight(br, bg, bb)
+            val total = wd + wb
+
+            val outR = ((dr * wd + br * wb) / total).roundToInt().coerceIn(0, 255)
+            val outG = ((dg * wd + bg * wb) / total).roundToInt().coerceIn(0, 255)
+            val outB = ((db * wd + bb * wb) / total).roundToInt().coerceIn(0, 255)
+            out[i] = (0xFF shl 24) or (outR shl 16) or (outG shl 8) or outB
+        }
+        return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    /** Gaussian well-exposedness weight favoring midtones (Mertens et al. exposure fusion). */
+    private fun wellExposedWeight(r: Int, g: Int, b: Int): Float {
+        val sigma = 0.2f
+        fun term(c: Int): Float {
+            val x = c / 255f - 0.5f
+            return exp(-(x * x) / (2 * sigma * sigma))
+        }
+        return term(r) * term(g) * term(b) + 1e-4f
     }
 
     fun unbind() {

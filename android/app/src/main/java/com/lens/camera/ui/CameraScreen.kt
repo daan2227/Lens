@@ -163,9 +163,6 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             cameraController.setManualIso(if (state.manualIsoEnabled) state.isoValue else null)
         }
     }
-    LaunchedEffect(state.flashEnabled, state.cameraReady) {
-        if (state.cameraReady) cameraController.setFlashMode(state.flashEnabled)
-    }
 
     var reticleOffset by remember { mutableStateOf<Offset?>(null) }
     var reticleTick by remember { mutableStateOf(0) }

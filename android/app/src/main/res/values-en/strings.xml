@@ -44,7 +44,8 @@
     <string name="toast_deleted">Photo deleted</string>
     <string name="toast_capture_failed">Couldn\'t capture the photo</string>
     <string name="toast_frame_selected">Frame: %1$s</string>
-    <string name="toast_hdr_unsupported">HDR isn\'t available on this camera</string>
+    <string name="toast_hdr_on">HDR on</string>
+    <string name="toast_hdr_off">HDR off</string>
     <string name="toast_iso_unsupported">Manual ISO isn\'t available on this device</string>
 
     <string name="editor_title">EDIT COLLAGE</string>

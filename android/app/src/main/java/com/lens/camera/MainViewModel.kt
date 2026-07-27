@@ -167,9 +167,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         it.copy(exposureIndex = index.coerceIn(it.exposureRange))
     }
 
+    // HDR always toggles: when the device's camera exposes a native HDR extension
+    // (hdrSupported) the capture pipeline itself returns a fused frame; otherwise
+    // onShutter() falls back to a manual bracketed-exposure fusion so the toggle
+    // still does something real instead of just reporting "unsupported".
     fun toggleHdr() = _state.update {
-        if (!it.hdrSupported) it.copy(toast = str(R.string.toast_hdr_unsupported))
-        else it.copy(hdrEnabled = !it.hdrEnabled)
+        val next = !it.hdrEnabled
+        it.copy(hdrEnabled = next, toast = str(if (next) R.string.toast_hdr_on else R.string.toast_hdr_off))
     }
 
     fun toggleManualIso() = _state.update {
@@ -209,14 +213,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             _state.update { it.copy(countdownValue = null) }
         }
-        // Cameras with a physical flash unit get the real LED (wired via
-        // CameraController.setFlashMode); a quick screen flash is just visual feedback
-        // there. Cameras without one (front-facing) get no real flash hardware at all,
-        // so the screen itself is held bright through the capture to actually help.
+        // Cameras with a physical flash unit get the LED forced on via torch (a direct
+        // hardware control, unlike ImageCapture's flash mode which some devices silently
+        // fail to trigger through the AE-precapture handshake). Cameras without one
+        // (front-facing) get no real flash hardware at all, so the screen itself is held
+        // bright through the capture to actually help.
         val hasHardwareFlash = cameraController?.hasFlashUnit == true
+        val usingTorch = _state.value.flashEnabled && hasHardwareFlash
         if (_state.value.flashEnabled) {
-            if (hasHardwareFlash) {
+            if (usingTorch) {
+                cameraController?.setTorch(true)
                 _state.update { it.copy(flashFxTick = it.flashFxTick + 1) }
+                delay(350)
             } else {
                 _state.update { it.copy(flashHold = true) }
                 delay(450)
@@ -225,14 +233,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val matrix = _state.value.activeColorMatrix
         val mirror = _state.value.selectedCameraIsFront
+        val useManualHdr = _state.value.hdrEnabled && !_state.value.hdrSupported
         val bitmap = if (cameraController != null && _state.value.cameraReady && !_state.value.demoMode) {
             try {
-                cameraController.capturePhoto(matrix, mirror)
+                if (useManualHdr) {
+                    cameraController.captureHdrPhoto(matrix, mirror)
+                } else {
+                    cameraController.capturePhoto(matrix, mirror)
+                }
             } catch (e: Exception) {
                 null
             }
         } else {
             null
+        }
+        if (usingTorch) {
+            cameraController?.setTorch(false)
         }
         if (_state.value.flashHold) {
             _state.update { it.copy(flashHold = false) }
