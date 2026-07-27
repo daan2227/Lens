@@ -61,6 +61,7 @@
     <string name="toast_hyperlapse_started">Grabando hyperlapse…</string>
     <string name="toast_hyperlapse_saved">Hyperlapse guardado en galería</string>
     <string name="toast_hyperlapse_too_short">Grabación demasiado corta, descartada</string>
+    <string name="toast_hyperlapse_failed">No se pudo grabar el hyperlapse en este dispositivo</string>
     <string name="toast_hyperlapse_interval">Intervalo: %1$ds</string>
 
     <!-- Collage editor -->

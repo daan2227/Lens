@@ -54,6 +54,7 @@
     <string name="toast_hyperlapse_started">Recording hyperlapse…</string>
     <string name="toast_hyperlapse_saved">Hyperlapse saved to gallery</string>
     <string name="toast_hyperlapse_too_short">Recording was too short, discarded</string>
+    <string name="toast_hyperlapse_failed">Couldn\'t record the hyperlapse on this device</string>
     <string name="toast_hyperlapse_interval">Interval: %1$ds</string>
 
     <string name="editor_title">EDIT COLLAGE</string>

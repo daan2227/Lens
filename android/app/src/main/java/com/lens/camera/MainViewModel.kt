@@ -428,6 +428,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         hyperlapseJob = viewModelScope.launch {
             var encoder: HyperlapseEncoder? = null
             var outputFile: File? = null
+            var encodingFailed = false
             try {
                 while (isActive) {
                     val matrix = _state.value.activeColorMatrix
@@ -438,36 +439,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         null
                     }
                     if (frame != null) {
-                        if (encoder == null) {
-                            val (w, h) = hyperlapseTargetSize(frame.width, frame.height)
-                            val file = captureStore.newVideoFile()
-                            outputFile = file
-                            encoder = withContext(Dispatchers.Default) { HyperlapseEncoder(file, w, h) }
+                        try {
+                            if (encoder == null) {
+                                val (w, h) = hyperlapseTargetSize(frame.width, frame.height)
+                                val file = captureStore.newVideoFile()
+                                outputFile = file
+                                encoder = withContext(Dispatchers.Default) { HyperlapseEncoder(file, w, h) }
+                            }
+                            encoder?.let { currentEncoder ->
+                                withContext(Dispatchers.Default) { currentEncoder.addFrame(frame) }
+                            }
+                            _state.update { it.copy(hyperlapseFrameCount = it.hyperlapseFrameCount + 1) }
+                        } catch (e: Exception) {
+                            // The encoder failed on this device (unsupported format/size/bitrate
+                            // combo) — stop cleanly instead of crashing the recording loop.
+                            encodingFailed = true
                         }
-                        encoder?.let { currentEncoder ->
-                            withContext(Dispatchers.Default) { currentEncoder.addFrame(frame) }
-                        }
-                        _state.update { it.copy(hyperlapseFrameCount = it.hyperlapseFrameCount + 1) }
                     }
+                    if (encodingFailed) break
                     delay(_state.value.hyperlapseIntervalMs)
                 }
             } finally {
                 // Cleanup must run even when this coroutine was cancelled (stopHyperlapse),
                 // so suspend calls here need NonCancellable or they'd throw immediately.
                 encoder?.let { finishedEncoder ->
-                    withContext(NonCancellable + Dispatchers.Default) { finishedEncoder.finish() }
+                    try {
+                        withContext(NonCancellable + Dispatchers.Default) { finishedEncoder.finish() }
+                    } catch (e: Exception) {
+                        // Encoder already broken; there's nothing more we can salvage.
+                    }
                 }
                 val frames = _state.value.hyperlapseFrameCount
                 hyperlapseJob = null
                 _state.update { it.copy(hyperlapseRecording = false) }
-                if (outputFile != null && frames >= MIN_HYPERLAPSE_FRAMES) {
+                if (!encodingFailed && outputFile != null && frames >= MIN_HYPERLAPSE_FRAMES) {
                     val capture = Capture(outputFile)
                     _state.update {
                         it.copy(captures = listOf(capture) + it.captures, toast = str(R.string.toast_hyperlapse_saved))
                     }
                 } else {
                     outputFile?.delete()
-                    _state.update { it.copy(toast = str(R.string.toast_hyperlapse_too_short)) }
+                    val failureMessage = if (encodingFailed) R.string.toast_hyperlapse_failed else R.string.toast_hyperlapse_too_short
+                    _state.update { it.copy(toast = str(failureMessage)) }
                 }
             }
         }
