@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -38,6 +39,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
@@ -92,6 +94,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+
+/**
+ * A frosted "liquid glass" surface: a soft translucent gradient fill plus a bright
+ * hairline rim, evoking a glass panel floating over whatever sits behind it. This
+ * approximates the look without a real-time backdrop blur (not available here without
+ * a third-party blur library), which is enough for small floating controls.
+ */
+private fun Modifier.glass(shape: RoundedCornerShape): Modifier = this
+    .background(Color.Black.copy(alpha = .32f), shape)
+    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.White.copy(alpha = .02f))), shape)
+    .border(1.dp, Color.White.copy(alpha = .30f), shape)
 
 @Composable
 fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
@@ -205,7 +218,12 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
 
             HudData(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp))
 
-            if (state.zoomRange.endInclusive > state.zoomRange.start) {
+            if (state.mode == Mode.PRO) {
+                ProPanel(
+                    viewModel = viewModel,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
+                )
+            } else if (state.zoomRange.endInclusive > state.zoomRange.start) {
                 ZoomIndicator(
                     ratio = state.zoomRatio,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
@@ -213,7 +231,7 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             }
 
             if (state.cameraPickerOpen) {
-                CameraPickerDialog(viewModel)
+                CameraPickerDialog(viewModel, cameraController)
             }
 
             state.countdownValue?.let { value ->
@@ -277,7 +295,7 @@ private fun HudButton(icon: ImageVector, active: Boolean, contentDescription: St
     Box(
         Modifier
             .size(42.dp)
-            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+            .glass(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -389,7 +407,7 @@ private fun FlashFx(tick: Int) {
 private fun ZoomIndicator(ratio: Float, modifier: Modifier = Modifier) {
     Box(
         modifier
-            .background(Color.Black.copy(alpha = .45f), RoundedCornerShape(16.dp))
+            .glass(RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
         Text(
@@ -402,20 +420,25 @@ private fun ZoomIndicator(ratio: Float, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CameraPickerDialog(viewModel: MainViewModel) {
+private fun CameraPickerDialog(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
     val frontLabel = stringResource(R.string.camera_front)
     val backLabel = stringResource(R.string.camera_back)
     val genericLabel = stringResource(R.string.camera_generic)
 
+    val specs = remember(state.availableCameras) {
+        state.availableCameras.map { cameraController.cameraSpecs(it) }
+    }
+
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f)).clickable { viewModel.closeCameraPicker() },
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)).clickable { viewModel.closeCameraPicker() },
         contentAlignment = Alignment.Center
     ) {
         Column(
             Modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                .padding(16.dp)
+                .widthIn(min = 220.dp)
+                .glass(RoundedCornerShape(18.dp))
+                .padding(vertical = 8.dp)
         ) {
             state.availableCameras.forEachIndexed { i, info ->
                 val facing = info.lensFacing
@@ -425,16 +448,29 @@ private fun CameraPickerDialog(viewModel: MainViewModel) {
                     CameraSelector.LENS_FACING_BACK -> backLabel
                     else -> genericLabel
                 }
-                val label = if (sameFacingBefore > 0) "$base ${sameFacingBefore + 1}" else base
-                Text(
-                    label,
-                    color = if (i == state.selectedCameraIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (i == state.selectedCameraIndex) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier
+                val name = if (sameFacingBefore > 0) "$base ${sameFacingBefore + 1}" else base
+                val spec = specs.getOrNull(i)
+                val details = buildList {
+                    spec?.megapixels?.let { add("${it}MP") }
+                    spec?.focalLengthMm?.let { add(String.format(Locale.US, "%.1fmm", it)) }
+                }.joinToString(" · ")
+                val selected = i == state.selectedCameraIndex
+                Column(
+                    Modifier
                         .clickable { viewModel.selectCamera(i) }
-                        .padding(vertical = 10.dp, horizontal = 6.dp)
                         .fillMaxWidth()
-                )
+                        .padding(vertical = 10.dp, horizontal = 16.dp)
+                ) {
+                    Text(
+                        name,
+                        color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 13.sp
+                    )
+                    if (details.isNotEmpty()) {
+                        Text(details, color = Color.White.copy(alpha = .6f), fontSize = 10.sp)
+                    }
+                }
             }
         }
     }
@@ -467,7 +503,6 @@ private fun DemoScene(modifier: Modifier = Modifier) {
 private fun BottomPanel(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
     Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.systemBars)) {
-        if (state.mode == Mode.PRO) ProPanel(viewModel)
         if (state.mode == Mode.COLLAGE) {
             FramesRow(viewModel)
             LayoutsRow(viewModel)
@@ -519,22 +554,24 @@ private fun FiltersRow(viewModel: MainViewModel) {
 private enum class ProControl { CAMERA, ZOOM, EV, ISO, BRI, CON, SAT, TEMP }
 
 @Composable
-private fun ProPanel(viewModel: MainViewModel) {
+private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
     var active by remember { mutableStateOf<ProControl?>(null) }
     val frontLabel = stringResource(R.string.camera_front)
     val backLabel = stringResource(R.string.camera_back)
     val genericLabel = stringResource(R.string.camera_generic)
 
-    Column(Modifier.fillMaxWidth()) {
+    // Floats over the viewfinder as a self-contained overlay: it never takes part in
+    // the screen's layout, so opening a control never shrinks the camera preview.
+    Column(modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         active?.let { control ->
             ProControlPopup(control, viewModel, state)
         }
         Row(
             Modifier
-                .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .glass(RoundedCornerShape(18.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -615,14 +652,15 @@ private fun ProChip(
 ) {
     Row(
         Modifier
-            .background(
-                if (active) MaterialTheme.colorScheme.primary.copy(alpha = .22f) else Color.Black.copy(alpha = .28f),
-                RoundedCornerShape(14.dp)
-            )
-            .border(
-                1.dp,
-                if (active) MaterialTheme.colorScheme.primary.copy(alpha = .6f) else Color.White.copy(alpha = .12f),
-                RoundedCornerShape(14.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .then(
+                if (active) {
+                    Modifier
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = .24f), RoundedCornerShape(14.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .65f), RoundedCornerShape(14.dp))
+                } else {
+                    Modifier.glass(RoundedCornerShape(14.dp))
+                }
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -644,8 +682,8 @@ private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .background(Color.Black.copy(alpha = .55f), RoundedCornerShape(14.dp))
+            .padding(bottom = 6.dp)
+            .glass(RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         when (control) {

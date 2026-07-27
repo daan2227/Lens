@@ -36,6 +36,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+/** Rough hardware specs for a camera, used to tell same-facing lenses apart in the picker. */
+data class CameraSpecs(val megapixels: Int?, val focalLengthMm: Float?)
+
 /** Thin CameraX wrapper: binds preview + still capture and post-processes captures with a filter. */
 class CameraController(private val context: Context) {
 
@@ -52,6 +55,18 @@ class CameraController(private val context: Context) {
     suspend fun availableCameras(): List<CameraInfo> {
         val provider = cameraProvider ?: getCameraProvider(context).also { cameraProvider = it }
         return provider.availableCameraInfos
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    fun cameraSpecs(info: CameraInfo): CameraSpecs = try {
+        val char = Camera2CameraInfo.from(info)
+        val pixelArray = char.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
+        val megapixels = pixelArray?.let { ((it.width.toLong() * it.height.toLong()) / 1_000_000L).toInt() }
+        val focalLength = char.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            ?.firstOrNull()
+        CameraSpecs(megapixels, focalLength)
+    } catch (e: Exception) {
+        CameraSpecs(null, null)
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
