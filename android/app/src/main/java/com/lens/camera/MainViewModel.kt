@@ -348,7 +348,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun openViewer(index: Int) = _state.update { it.copy(viewerIndex = index) }
     fun closeViewer() = _state.update { it.copy(viewerIndex = -1) }
 
-    fun loadCaptureBitmap(capture: Capture): Bitmap? = captureStore.loadBitmap(capture)
+    fun loadCaptureBitmap(capture: Capture, maxDimension: Int = Int.MAX_VALUE): Bitmap? =
+        captureStore.loadBitmap(capture, maxDimension)
 
     fun exportToGallery(capture: Capture): Uri? {
         val uri = captureStore.exportToGallery(capture)

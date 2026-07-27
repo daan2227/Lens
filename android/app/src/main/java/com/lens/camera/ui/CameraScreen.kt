@@ -87,6 +87,7 @@ import com.lens.camera.camera.CameraController
 import com.lens.camera.collage.LAYOUTS
 import com.lens.camera.filters.FILTERS
 import com.lens.camera.frames.FRAMES
+import com.lens.camera.gallery.THUMBNAIL_MAX_DIMENSION
 import com.lens.camera.ui.theme.Viewfinder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -824,9 +825,7 @@ private fun LayoutsRow(viewModel: MainViewModel) {
 @OptIn(ExperimentalFoundationApi::class)
 private fun ShutterRow(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
-    val thumb = remember(state.captures.firstOrNull()?.id) {
-        state.captures.firstOrNull()?.let { viewModel.loadCaptureBitmap(it) }
-    }
+    val thumb = rememberCaptureBitmap(viewModel, state.captures.firstOrNull(), THUMBNAIL_MAX_DIMENSION)
 
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 2.dp),

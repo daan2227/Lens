@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import com.lens.camera.MainViewModel
 import com.lens.camera.R
 import com.lens.camera.gallery.Capture
+import com.lens.camera.gallery.THUMBNAIL_MAX_DIMENSION
+import com.lens.camera.gallery.VIEWER_MAX_DIMENSION
 
 @Composable
 fun GalleryScreen(viewModel: MainViewModel) {
@@ -99,7 +101,7 @@ fun GalleryScreen(viewModel: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 items(state.captures, key = { it.id }) { capture ->
-                    val bitmap = remember(capture.id) { viewModel.loadCaptureBitmap(capture) }
+                    val bitmap = rememberCaptureBitmap(viewModel, capture, THUMBNAIL_MAX_DIMENSION)
                     bitmap?.let {
                         Image(
                             it.asImageBitmap(),
@@ -152,7 +154,7 @@ private fun ViewerDialog(viewModel: MainViewModel, captures: List<Capture>, init
                     .clipToBounds()
             ) { page ->
                 val pageCapture = captures.getOrNull(page)
-                val bitmap = remember(pageCapture?.id) { pageCapture?.let(viewModel::loadCaptureBitmap) }
+                val bitmap = rememberCaptureBitmap(viewModel, pageCapture, VIEWER_MAX_DIMENSION)
                 bitmap?.let {
                     ZoomableImage(
                         bitmap = it.asImageBitmap(),
