@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -15,6 +16,7 @@ import java.io.FileOutputStream
 
 data class Capture(val file: File) {
     val id: String get() = file.name
+    val isVideo: Boolean get() = file.extension == "mp4"
 }
 
 /** Gallery grid tiles only need a small preview; this keeps decoding fast and cheap. */
@@ -42,7 +44,7 @@ class CaptureStore(private val context: Context) {
     }
 
     fun listAll(): List<Capture> =
-        dir.listFiles { f -> f.isFile && f.extension == "jpg" }
+        dir.listFiles { f -> f.isFile && (f.extension == "jpg" || f.extension == "mp4") }
             ?.sortedByDescending { it.lastModified() }
             ?.map { Capture(it) }
             ?: emptyList()
@@ -54,6 +56,10 @@ class CaptureStore(private val context: Context) {
         }
         return Capture(file)
     }
+
+    /** A fresh file path for a hyperlapse recording in progress; wrap the result in [Capture]
+     *  once it's finished encoding and ready to show in the gallery. */
+    fun newVideoFile(): File = File(dir, "LENS_${System.currentTimeMillis()}.mp4")
 
     /**
      * Decodes a capture downsampled to roughly [maxDimension] on its longest side instead of
@@ -90,31 +96,71 @@ class CaptureStore(private val context: Context) {
         return decoded
     }
 
+    /**
+     * A still frame pulled from a video capture for use as its gallery thumbnail, downsampled
+     * the same way [loadBitmap] downsamples photos.
+     */
+    fun loadVideoThumbnail(capture: Capture, maxDimension: Int): Bitmap? {
+        val cacheKey = "${capture.id}:video:$maxDimension"
+        bitmapCache.get(cacheKey)?.let { return it }
+
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(capture.file.path)
+            val frame = retriever.frameAtTime ?: return null
+            val longSide = maxOf(frame.width, frame.height)
+            val scaled = if (longSide > maxDimension) {
+                val scale = maxDimension.toFloat() / longSide
+                Bitmap.createScaledBitmap(
+                    frame,
+                    (frame.width * scale).toInt().coerceAtLeast(1),
+                    (frame.height * scale).toInt().coerceAtLeast(1),
+                    true
+                )
+            } else {
+                frame
+            }
+            bitmapCache.put(cacheKey, scaled)
+            scaled
+        } catch (e: Exception) {
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
     fun delete(capture: Capture) {
         capture.file.delete()
         bitmapCache.remove("${capture.id}:$THUMBNAIL_MAX_DIMENSION")
         bitmapCache.remove("${capture.id}:$VIEWER_MAX_DIMENSION")
         bitmapCache.remove("${capture.id}:${Int.MAX_VALUE}")
+        bitmapCache.remove("${capture.id}:video:$THUMBNAIL_MAX_DIMENSION")
+        bitmapCache.remove("${capture.id}:video:$VIEWER_MAX_DIMENSION")
     }
 
-    /** Copies the capture into the public Pictures/LENS gallery folder. Returns the new content Uri. */
+    /** Copies the capture into the public Pictures/LENS (or Movies/LENS for video) gallery
+     *  folder. Returns the new content Uri. */
     fun exportToGallery(capture: Capture): Uri? {
         val resolver = context.contentResolver
+        val isVideo = capture.isVideo
+        val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val mimeType = if (isVideo) "video/mp4" else "image/jpeg"
+        val folder = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, capture.file.name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, capture.file.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/LENS")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "$folder/LENS")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        val uri = resolver.insert(collection, values) ?: return null
         resolver.openOutputStream(uri)?.use { out ->
             capture.file.inputStream().use { input -> input.copyTo(out) }
         } ?: return null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
         }
         return uri

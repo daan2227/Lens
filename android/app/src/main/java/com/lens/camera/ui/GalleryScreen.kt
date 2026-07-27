@@ -1,6 +1,9 @@
 package com.lens.camera.ui
 
 import android.content.Intent
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -27,7 +31,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -54,6 +61,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.lens.camera.MainViewModel
 import com.lens.camera.R
 import com.lens.camera.gallery.Capture
@@ -103,14 +111,26 @@ fun GalleryScreen(viewModel: MainViewModel) {
                 items(state.captures, key = { it.id }) { capture ->
                     val bitmap = rememberCaptureBitmap(viewModel, capture, THUMBNAIL_MAX_DIMENSION)
                     bitmap?.let {
-                        Image(
-                            it.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier
+                        Box(
+                            Modifier
                                 .aspectRatio(3f / 4f)
-                                .clickable { viewModel.openViewer(state.captures.indexOf(capture)) },
-                            contentScale = ContentScale.Crop
-                        )
+                                .clickable { viewModel.openViewer(state.captures.indexOf(capture)) }
+                        ) {
+                            Image(
+                                it.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            if (capture.isVideo) {
+                                Icon(
+                                    Icons.Filled.PlayCircle,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.align(Alignment.Center).size(28.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -154,13 +174,17 @@ private fun ViewerDialog(viewModel: MainViewModel, captures: List<Capture>, init
                     .clipToBounds()
             ) { page ->
                 val pageCapture = captures.getOrNull(page)
-                val bitmap = rememberCaptureBitmap(viewModel, pageCapture, VIEWER_MAX_DIMENSION)
-                bitmap?.let {
-                    ZoomableImage(
-                        bitmap = it.asImageBitmap(),
-                        onZoomChanged = { zoomed -> if (page == pagerState.currentPage) zoomedIn = zoomed },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                if (pageCapture?.isVideo == true) {
+                    VideoPlayerView(capture = pageCapture, modifier = Modifier.fillMaxSize())
+                } else {
+                    val bitmap = rememberCaptureBitmap(viewModel, pageCapture, VIEWER_MAX_DIMENSION)
+                    bitmap?.let {
+                        ZoomableImage(
+                            bitmap = it.asImageBitmap(),
+                            onZoomChanged = { zoomed -> if (page == pagerState.currentPage) zoomedIn = zoomed },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
             Row(
@@ -175,7 +199,7 @@ private fun ViewerDialog(viewModel: MainViewModel, captures: List<Capture>, init
                 OutlinedButton(onClick = {
                     val uri = viewModel.shareUri(capture)
                     val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
+                        type = if (capture.isVideo) "video/mp4" else "image/jpeg"
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
@@ -242,5 +266,24 @@ private fun ZoomableImage(bitmap: ImageBitmap, onZoomChanged: (Boolean) -> Unit,
                     } while (event.changes.any { it.pressed })
                 }
             }
+    )
+}
+
+/** Plays a hyperlapse capture in place, looping, with the framework's built-in transport
+ *  controls (tap to show/hide play/pause and a scrub bar). */
+@Composable
+private fun VideoPlayerView(capture: Capture, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            VideoView(ctx).apply {
+                setVideoURI(Uri.fromFile(capture.file))
+                setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                setOnPreparedListener { player ->
+                    player.isLooping = true
+                    start()
+                }
+            }
+        }
     )
 }

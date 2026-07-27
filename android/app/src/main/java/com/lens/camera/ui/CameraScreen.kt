@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -80,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lens.camera.AppUiState
+import com.lens.camera.DEFAULT_SHUTTER_SPEED_NS
 import com.lens.camera.MainViewModel
 import com.lens.camera.Mode
 import com.lens.camera.R
@@ -94,6 +97,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.roundToInt
 
 /**
@@ -133,11 +138,13 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
                 cameraController.bind(pv, lifecycleOwner, selectedCamera, state.hdrEnabled)
                 viewModel.setCameraReady(ready = true, demo = false)
                 val iso = cameraController.isoRange()
+                val shutter = cameraController.shutterSpeedRange()
                 viewModel.setCameraCapabilities(
                     zoomRange = cameraController.zoomRange(),
                     exposureRange = cameraController.exposureRange(),
                     isoRange = if (iso != null) iso.lower..iso.upper else 100..100,
-                    manualIsoSupported = cameraController.hasManualSensorControl(),
+                    shutterSpeedRange = if (shutter != null) shutter.lower..shutter.upper else DEFAULT_SHUTTER_SPEED_NS..DEFAULT_SHUTTER_SPEED_NS,
+                    manualExposureSupported = cameraController.hasManualSensorControl(),
                     hdrSupported = cameraController.isHdrSupported(selectedCamera)
                 )
             } catch (e: Exception) {
@@ -159,9 +166,12 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
     LaunchedEffect(state.exposureIndex, state.cameraReady) {
         if (state.cameraReady) cameraController.setExposureIndex(state.exposureIndex)
     }
-    LaunchedEffect(state.manualIsoEnabled, state.isoValue, state.cameraReady) {
+    LaunchedEffect(state.manualExposureEnabled, state.isoValue, state.shutterSpeedNs, state.cameraReady) {
         if (state.cameraReady) {
-            cameraController.setManualIso(if (state.manualIsoEnabled) state.isoValue else null)
+            cameraController.setManualExposure(
+                iso = if (state.manualExposureEnabled) state.isoValue else null,
+                shutterSpeedNs = if (state.manualExposureEnabled) state.shutterSpeedNs else null
+            )
         }
     }
 
@@ -222,7 +232,7 @@ fun CameraScreen(viewModel: MainViewModel, cameraPermissionGranted: Boolean) {
             if (state.mode == Mode.PRO) {
                 ProPanel(
                     viewModel = viewModel,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp)
                 )
             } else if (state.zoomRange.endInclusive > state.zoomRange.start) {
                 ZoomIndicator(
@@ -507,14 +517,57 @@ private fun DemoScene(modifier: Modifier = Modifier) {
 private fun BottomPanel(viewModel: MainViewModel, cameraController: CameraController) {
     val state by viewModel.state.collectAsState()
     Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.systemBars)) {
-        if (state.mode == Mode.COLLAGE) {
-            FramesRow(viewModel)
-            LayoutsRow(viewModel)
-        } else {
-            FiltersRow(viewModel)
+        when (state.mode) {
+            Mode.COLLAGE -> {
+                FramesRow(viewModel)
+                LayoutsRow(viewModel)
+            }
+            Mode.HYPERLAPSE -> HyperlapseRow(viewModel)
+            else -> FiltersRow(viewModel)
         }
         ShutterRow(viewModel, cameraController)
         ModeSwitcher(viewModel)
+    }
+}
+
+@Composable
+private fun HyperlapseRow(viewModel: MainViewModel) {
+    val state by viewModel.state.collectAsState()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (state.hyperlapseRecording) {
+            Row(
+                Modifier.glass(RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(Modifier.size(8.dp).background(Color(0xFFE23B3B), CircleShape))
+                Text(
+                    stringResource(R.string.hyperlapse_frames, state.hyperlapseFrameCount),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        } else {
+            Row(
+                Modifier
+                    .clickable { viewModel.cycleHyperlapseInterval() }
+                    .glass(RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.hyperlapse_interval, state.hyperlapseIntervalMs / 1000),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 
@@ -555,7 +608,7 @@ private fun FiltersRow(viewModel: MainViewModel) {
     }
 }
 
-private enum class ProControl { CAMERA, ZOOM, EV, ISO, BRI, CON, SAT, TEMP }
+private enum class ProControl { CAMERA, ZOOM, EV, ISO, SHUTTER, BRI, CON, SAT, TEMP }
 
 @Composable
 private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
@@ -566,18 +619,21 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val genericLabel = stringResource(R.string.camera_generic)
 
     // Floats over the viewfinder as a self-contained overlay: it never takes part in
-    // the screen's layout, so opening a control never shrinks the camera preview.
-    Column(modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    // the screen's layout, so opening a control never shrinks the camera preview. A
+    // vertical rail down the edge instead of a horizontal bar keeps it clear of the
+    // shutter/mode controls at the bottom and out of the way of the framed shot.
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         active?.let { control ->
             ProControlPopup(control, viewModel, state)
         }
-        Row(
+        Column(
             Modifier
-                .horizontalScroll(rememberScrollState())
+                .heightIn(max = 380.dp)
+                .verticalScroll(rememberScrollState())
                 .glass(RoundedCornerShape(18.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 6.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             ProChip(
                 label = cameraChipLabel(state, frontLabel, backLabel, genericLabel),
@@ -601,12 +657,18 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     onClick = { active = if (active == ProControl.EV) null else ProControl.EV }
                 )
             }
-            if (state.manualIsoSupported) {
+            if (state.manualExposureSupported) {
                 ProChip(
                     label = stringResource(R.string.pro_iso),
-                    value = if (state.manualIsoEnabled) state.isoValue.toString() else "AUTO",
+                    value = if (state.manualExposureEnabled) state.isoValue.toString() else "AUTO",
                     active = active == ProControl.ISO,
                     onClick = { active = if (active == ProControl.ISO) null else ProControl.ISO }
+                )
+                ProChip(
+                    label = stringResource(R.string.pro_shutter),
+                    value = if (state.manualExposureEnabled) formatShutterSpeed(state.shutterSpeedNs) else "AUTO",
+                    active = active == ProControl.SHUTTER,
+                    onClick = { active = if (active == ProControl.SHUTTER) null else ProControl.SHUTTER }
                 )
             }
             ProChip(
@@ -634,6 +696,17 @@ private fun ProPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onClick = { active = if (active == ProControl.TEMP) null else ProControl.TEMP }
             )
         }
+    }
+}
+
+/** Formats a shutter speed for display: "1/125" for fast speeds, "2.0s" for long exposures. */
+private fun formatShutterSpeed(ns: Long): String {
+    val seconds = ns / 1_000_000_000f
+    return if (seconds >= 1f) {
+        String.format(Locale.US, "%.1fs", seconds)
+    } else {
+        val denominator = (1f / seconds).roundToInt().coerceAtLeast(1)
+        "1/$denominator"
     }
 }
 
@@ -685,8 +758,7 @@ private fun ProChip(
 private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state: AppUiState) {
     Box(
         Modifier
-            .fillMaxWidth()
-            .padding(bottom = 6.dp)
+            .width(210.dp)
             .glass(RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
@@ -710,15 +782,41 @@ private fun ProControlPopup(control: ProControl, viewModel: MainViewModel, state
                         color = Color.White.copy(alpha = .8f)
                     )
                     androidx.compose.material3.Switch(
-                        checked = state.manualIsoEnabled,
-                        onCheckedChange = { viewModel.toggleManualIso() }
+                        checked = state.manualExposureEnabled,
+                        onCheckedChange = { viewModel.toggleManualExposure() }
                     )
                 }
-                if (state.manualIsoEnabled) {
+                if (state.manualExposureEnabled) {
                     MiniSlider(
                         state.isoValue.toFloat(), state.isoRange.first.toFloat(), state.isoRange.last.toFloat(),
                         display = state.isoValue.toString()
                     ) { viewModel.setIso(it.roundToInt()) }
+                }
+            }
+
+            ProControl.SHUTTER -> Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.pro_shutter),
+                        Modifier.weight(1f),
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = .8f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = state.manualExposureEnabled,
+                        onCheckedChange = { viewModel.toggleManualExposure() }
+                    )
+                }
+                if (state.manualExposureEnabled) {
+                    // Shutter speed spans several orders of magnitude (e.g. 1/10000s to
+                    // 10s), so the slider works in log space and converts back on change.
+                    val minLog = ln(state.shutterSpeedRange.first.toFloat())
+                    val maxLog = ln(state.shutterSpeedRange.last.toFloat())
+                    val valueLog = ln(state.shutterSpeedNs.toFloat())
+                    MiniSlider(
+                        valueLog, minLog, maxLog,
+                        display = formatShutterSpeed(state.shutterSpeedNs)
+                    ) { viewModel.setShutterSpeed(exp(it).toLong()) }
                 }
             }
 
@@ -850,17 +948,28 @@ private fun ShutterRow(viewModel: MainViewModel, cameraController: CameraControl
             }
         }
 
+        val recording = state.mode == Mode.HYPERLAPSE && state.hyperlapseRecording
         Box(
             Modifier
                 .size(76.dp)
                 .border(4.dp, Color.White, CircleShape)
-                .clickable { viewModel.onShutter(cameraController) },
+                .clickable {
+                    if (state.mode == Mode.HYPERLAPSE) viewModel.toggleHyperlapse(cameraController)
+                    else viewModel.onShutter(cameraController)
+                },
             contentAlignment = Alignment.Center
         ) {
             Box(
                 Modifier
                     .size(58.dp)
-                    .background(if (state.mode == Mode.COLLAGE) MaterialTheme.colorScheme.primary else Color.White, CircleShape)
+                    .background(
+                        when {
+                            recording -> Color(0xFFE23B3B)
+                            state.mode == Mode.COLLAGE -> MaterialTheme.colorScheme.primary
+                            else -> Color.White
+                        },
+                        if (recording) RoundedCornerShape(10.dp) else CircleShape
+                    )
             )
         }
 
@@ -887,6 +996,7 @@ private fun ModeSwitcher(viewModel: MainViewModel) {
             ModeTab(stringResource(R.string.mode_photo), state.mode == Mode.PHOTO) { viewModel.setMode(Mode.PHOTO) }
             ModeTab(stringResource(R.string.mode_collage), state.mode == Mode.COLLAGE) { viewModel.setMode(Mode.COLLAGE) }
             ModeTab(stringResource(R.string.mode_pro), state.mode == Mode.PRO) { viewModel.setMode(Mode.PRO) }
+            ModeTab(stringResource(R.string.mode_hyperlapse), state.mode == Mode.HYPERLAPSE) { viewModel.setMode(Mode.HYPERLAPSE) }
         }
     }
 }

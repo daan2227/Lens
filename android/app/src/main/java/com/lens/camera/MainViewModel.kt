@@ -16,14 +16,24 @@ import com.lens.camera.filters.buildColorMatrix
 import com.lens.camera.frames.FRAMES
 import com.lens.camera.gallery.Capture
 import com.lens.camera.gallery.CaptureStore
+import com.lens.camera.hyperlapse.HyperlapseEncoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
-enum class Mode { PHOTO, COLLAGE, PRO }
+enum class Mode { PHOTO, COLLAGE, PRO, HYPERLAPSE }
+
+/** 1/60s, in nanoseconds — a sane default shutter speed until the camera reports its real range. */
+const val DEFAULT_SHUTTER_SPEED_NS = 1_000_000_000L / 60
 
 data class AppUiState(
     val mode: Mode = Mode.PHOTO,
@@ -43,10 +53,12 @@ data class AppUiState(
     val exposureRange: IntRange = 0..0,
     val hdrEnabled: Boolean = false,
     val hdrSupported: Boolean = false,
-    val manualIsoEnabled: Boolean = false,
+    val manualExposureEnabled: Boolean = false,
     val isoValue: Int = 100,
     val isoRange: IntRange = 100..100,
-    val manualIsoSupported: Boolean = false,
+    val shutterSpeedNs: Long = DEFAULT_SHUTTER_SPEED_NS,
+    val shutterSpeedRange: LongRange = DEFAULT_SHUTTER_SPEED_NS..DEFAULT_SHUTTER_SPEED_NS,
+    val manualExposureSupported: Boolean = false,
 
     val layoutIndex: Int = 3,
     val frameIndex: Int = 0,
@@ -62,7 +74,11 @@ data class AppUiState(
     val replaceIndex: Int = -1,
     val galleryOpen: Boolean = false,
     val viewerIndex: Int = -1,
-    val toast: String? = null
+    val toast: String? = null,
+
+    val hyperlapseRecording: Boolean = false,
+    val hyperlapseIntervalMs: Long = 2000L,
+    val hyperlapseFrameCount: Int = 0
 ) {
     val activeColorMatrix
         get() = buildColorMatrix(FILTERS[filterIndex] + if (mode == Mode.PRO || !pro.isIdentity) pro.toOps() else emptyList())
@@ -86,7 +102,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(AppUiState(captures = captureStore.listAll()))
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
+    private var hyperlapseJob: Job? = null
+
     fun setMode(mode: Mode) {
+        if (_state.value.hyperlapseRecording && mode != Mode.HYPERLAPSE) stopHyperlapse()
         _state.update {
             it.copy(mode = mode, collageShots = emptyList(), replaceIndex = -1, editorOpen = false)
         }
@@ -130,7 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             cameraPickerOpen = false,
             zoomRatio = 1f,
             exposureIndex = 0,
-            manualIsoEnabled = false
+            manualExposureEnabled = false
         )
     }
 
@@ -141,14 +160,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT
         val next = it.availableCameras.indexOfFirst { c -> c.lensFacing == targetFacing }
         if (next < 0) return@update it
-        it.copy(selectedCameraIndex = next, zoomRatio = 1f, exposureIndex = 0, manualIsoEnabled = false)
+        it.copy(selectedCameraIndex = next, zoomRatio = 1f, exposureIndex = 0, manualExposureEnabled = false)
     }
 
     fun setCameraCapabilities(
         zoomRange: ClosedFloatingPointRange<Float>,
         exposureRange: IntRange,
         isoRange: IntRange,
-        manualIsoSupported: Boolean,
+        shutterSpeedRange: LongRange,
+        manualExposureSupported: Boolean,
         hdrSupported: Boolean
     ) = _state.update {
         it.copy(
@@ -156,7 +176,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             exposureRange = exposureRange,
             isoRange = isoRange,
             isoValue = isoRange.first + (isoRange.last - isoRange.first) / 2,
-            manualIsoSupported = manualIsoSupported,
+            shutterSpeedRange = shutterSpeedRange,
+            shutterSpeedNs = DEFAULT_SHUTTER_SPEED_NS.coerceIn(shutterSpeedRange),
+            manualExposureSupported = manualExposureSupported,
             hdrSupported = hdrSupported
         )
     }
@@ -176,12 +198,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         it.copy(hdrEnabled = next, toast = str(if (next) R.string.toast_hdr_on else R.string.toast_hdr_off))
     }
 
-    fun toggleManualIso() = _state.update {
-        if (!it.manualIsoSupported) it.copy(toast = str(R.string.toast_iso_unsupported))
-        else it.copy(manualIsoEnabled = !it.manualIsoEnabled)
+    fun toggleManualExposure() = _state.update {
+        if (!it.manualExposureSupported) it.copy(toast = str(R.string.toast_manual_exposure_unsupported))
+        else it.copy(manualExposureEnabled = !it.manualExposureEnabled)
     }
 
     fun setIso(value: Int) = _state.update { it.copy(isoValue = value.coerceIn(it.isoRange)) }
+
+    fun setShutterSpeed(ns: Long) = _state.update { it.copy(shutterSpeedNs = ns.coerceIn(it.shutterSpeedRange)) }
 
     fun selectLayout(index: Int) = _state.update {
         it.copy(layoutIndex = index, collageShots = emptyList())
@@ -349,7 +373,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun closeViewer() = _state.update { it.copy(viewerIndex = -1) }
 
     fun loadCaptureBitmap(capture: Capture, maxDimension: Int = Int.MAX_VALUE): Bitmap? =
-        captureStore.loadBitmap(capture, maxDimension)
+        if (capture.isVideo) captureStore.loadVideoThumbnail(capture, maxDimension)
+        else captureStore.loadBitmap(capture, maxDimension)
 
     fun exportToGallery(capture: Capture): Uri? {
         val uri = captureStore.exportToGallery(capture)
@@ -368,5 +393,99 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 toast = str(R.string.toast_deleted)
             )
         }
+    }
+
+    // ---- Hyperlapse: captures still photos on an interval and encodes them into an
+    // accelerated MP4, so a long real-world capture plays back as a short sped-up clip. ----
+
+    fun cycleHyperlapseInterval() = _state.update {
+        val next = when (it.hyperlapseIntervalMs) {
+            1000L -> 2000L
+            2000L -> 5000L
+            5000L -> 10000L
+            else -> 1000L
+        }
+        it.copy(hyperlapseIntervalMs = next, toast = str(R.string.toast_hyperlapse_interval, next / 1000))
+    }
+
+    fun toggleHyperlapse(cameraController: CameraController?) {
+        if (_state.value.hyperlapseRecording) stopHyperlapse() else startHyperlapse(cameraController)
+    }
+
+    fun stopHyperlapse() {
+        hyperlapseJob?.cancel()
+    }
+
+    private fun startHyperlapse(cameraController: CameraController?) {
+        if (hyperlapseJob != null) return
+        if (cameraController == null || !_state.value.cameraReady || _state.value.demoMode) {
+            _state.update { it.copy(toast = str(R.string.toast_capture_failed)) }
+            return
+        }
+        _state.update {
+            it.copy(hyperlapseRecording = true, hyperlapseFrameCount = 0, toast = str(R.string.toast_hyperlapse_started))
+        }
+        hyperlapseJob = viewModelScope.launch {
+            var encoder: HyperlapseEncoder? = null
+            var outputFile: File? = null
+            try {
+                while (isActive) {
+                    val matrix = _state.value.activeColorMatrix
+                    val mirror = _state.value.selectedCameraIsFront
+                    val frame = try {
+                        cameraController.capturePhoto(matrix, mirror)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (frame != null) {
+                        if (encoder == null) {
+                            val (w, h) = hyperlapseTargetSize(frame.width, frame.height)
+                            val file = captureStore.newVideoFile()
+                            outputFile = file
+                            encoder = withContext(Dispatchers.Default) { HyperlapseEncoder(file, w, h) }
+                        }
+                        encoder?.let { currentEncoder ->
+                            withContext(Dispatchers.Default) { currentEncoder.addFrame(frame) }
+                        }
+                        _state.update { it.copy(hyperlapseFrameCount = it.hyperlapseFrameCount + 1) }
+                    }
+                    delay(_state.value.hyperlapseIntervalMs)
+                }
+            } finally {
+                // Cleanup must run even when this coroutine was cancelled (stopHyperlapse),
+                // so suspend calls here need NonCancellable or they'd throw immediately.
+                encoder?.let { finishedEncoder ->
+                    withContext(NonCancellable + Dispatchers.Default) { finishedEncoder.finish() }
+                }
+                val frames = _state.value.hyperlapseFrameCount
+                hyperlapseJob = null
+                _state.update { it.copy(hyperlapseRecording = false) }
+                if (outputFile != null && frames >= MIN_HYPERLAPSE_FRAMES) {
+                    val capture = Capture(outputFile)
+                    _state.update {
+                        it.copy(captures = listOf(capture) + it.captures, toast = str(R.string.toast_hyperlapse_saved))
+                    }
+                } else {
+                    outputFile?.delete()
+                    _state.update { it.copy(toast = str(R.string.toast_hyperlapse_too_short)) }
+                }
+            }
+        }
+    }
+
+    /** Scales frames down to a fixed, encoder-friendly size (even dimensions, capped long
+     *  side) instead of encoding at full sensor resolution, which most AVC encoders can't
+     *  handle and would be far slower than needed for a small hyperlapse clip. */
+    private fun hyperlapseTargetSize(width: Int, height: Int): Pair<Int, Int> {
+        val maxLongSide = 1080
+        val longSide = maxOf(width, height)
+        val scale = if (longSide > maxLongSide) maxLongSide.toFloat() / longSide else 1f
+        val w = ((width * scale).toInt() / 2 * 2).coerceAtLeast(2)
+        val h = ((height * scale).toInt() / 2 * 2).coerceAtLeast(2)
+        return w to h
+    }
+
+    companion object {
+        private const val MIN_HYPERLAPSE_FRAMES = 2
     }
 }

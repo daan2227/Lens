@@ -7,6 +7,10 @@
     <string name="mode_photo">PHOTO</string>
     <string name="mode_collage">COLLAGE</string>
     <string name="mode_pro">PRO</string>
+    <string name="mode_hyperlapse">HYPERLAPSE</string>
+
+    <string name="hyperlapse_interval">Interval: %1$ds</string>
+    <string name="hyperlapse_frames">%1$d frames</string>
 
     <string name="hud_live">LIVE</string>
     <string name="hud_iso">ISO 200</string>
@@ -46,7 +50,11 @@
     <string name="toast_frame_selected">Frame: %1$s</string>
     <string name="toast_hdr_on">HDR on</string>
     <string name="toast_hdr_off">HDR off</string>
-    <string name="toast_iso_unsupported">Manual ISO isn\'t available on this device</string>
+    <string name="toast_manual_exposure_unsupported">Manual exposure isn\'t available on this device</string>
+    <string name="toast_hyperlapse_started">Recording hyperlapse…</string>
+    <string name="toast_hyperlapse_saved">Hyperlapse saved to gallery</string>
+    <string name="toast_hyperlapse_too_short">Recording was too short, discarded</string>
+    <string name="toast_hyperlapse_interval">Interval: %1$ds</string>
 
     <string name="editor_title">EDIT COLLAGE</string>
     <string name="editor_hint">Tap one photo, then another, to swap them</string>
@@ -69,6 +77,7 @@
     <string name="pro_zoom">ZOOM</string>
     <string name="pro_ev">EV</string>
     <string name="pro_iso">ISO</string>
+    <string name="pro_shutter">SS</string>
 
     <string-array name="filter_names">
         <item>Original</item>

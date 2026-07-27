@@ -195,7 +195,8 @@ class CameraController(private val context: Context) {
         camera?.cameraControl?.setExposureCompensationIndex(index)
     }
 
-    // ---- Manual ISO (best-effort; not every device exposes full manual sensor control) ----
+    // ---- Manual exposure: ISO + shutter speed (best-effort; not every device exposes
+    // full manual sensor control) ----
 
     @OptIn(ExperimentalCamera2Interop::class)
     fun hasManualSensorControl(): Boolean {
@@ -219,15 +220,27 @@ class CameraController(private val context: Context) {
         }
     }
 
+    /** Shutter speed range in nanoseconds, e.g. 100_000ns (1/10000s) to 10_000_000_000ns (10s). */
     @OptIn(ExperimentalCamera2Interop::class)
-    fun setManualIso(iso: Int?) {
+    fun shutterSpeedRange(): Range<Long>? {
+        val info = camera?.cameraInfo ?: return null
+        return try {
+            Camera2CameraInfo.from(info).getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Pass non-null for either param to switch AE off and take manual control of it. */
+    @OptIn(ExperimentalCamera2Interop::class)
+    fun setManualExposure(iso: Int?, shutterSpeedNs: Long?) {
         val control = camera?.cameraControl ?: return
         val cam2Control = Camera2CameraControl.from(control)
-        val options = if (iso != null) {
+        val options = if (iso != null || shutterSpeedNs != null) {
             CaptureRequestOptions.Builder()
                 .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
-                .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, iso)
-                .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 60)
+                .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, iso ?: 100)
+                .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, shutterSpeedNs ?: (1_000_000_000L / 60))
                 .build()
         } else {
             CaptureRequestOptions.Builder()
