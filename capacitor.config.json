@@ -1,0 +1,9 @@
+{
+  "appId": "com.lens.camera",
+  "appName": "LENS",
+  "webDir": "www",
+  "backgroundColor": "#060608",
+  "android": {
+    "backgroundColor": "#060608"
+  }
+}
