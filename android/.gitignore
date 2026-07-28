@@ -1,0 +1,16 @@
+# Build outputs
+build/
+.gradle/
+*.apk
+*.aab
+local.properties
+
+# Signing secrets — never commit these
+keystore.properties
+keystore/
+
+# IDE
+.idea/
+*.iml
+.cxx/
+captures/

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night palette -->
+    <color name="lens_bg">#060608</color>
+    <color name="lens_panel">#101014</color>
+    <color name="lens_panel2">#17171D</color>
+    <color name="lens_ink">#F2F1EC</color>
+    <color name="lens_mut">#8A8A93</color>
+    <color name="lens_accent">#FFD54A</color>
+    <color name="lens_rec">#E5484D</color>
+    <color name="lens_viewfinder">#000000</color>
+</resources>
