@@ -19,6 +19,7 @@
 
     <string name="cd_flash">Flash</string>
     <string name="cd_timer">Timer</string>
+    <string name="cd_night_mode">Night mode</string>
     <string name="cd_grid">Grid</string>
     <string name="cd_flip_camera">Switch camera</string>
     <string name="cd_gallery">Gallery</string>
@@ -51,6 +52,8 @@
     <string name="toast_hdr_on">HDR on</string>
     <string name="toast_hdr_off">HDR off</string>
     <string name="toast_manual_exposure_unsupported">Manual exposure isn\'t available on this device</string>
+    <string name="toast_night_mode_on">Night mode on</string>
+    <string name="toast_night_mode_off">Night mode off</string>
     <string name="toast_hyperlapse_started">Recording hyperlapse…</string>
     <string name="toast_hyperlapse_saved">Hyperlapse saved to gallery</string>
     <string name="toast_hyperlapse_too_short">Recording was too short, discarded</string>

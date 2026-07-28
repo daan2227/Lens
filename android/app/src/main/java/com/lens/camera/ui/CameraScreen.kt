@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness2
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
@@ -279,6 +280,12 @@ private fun TopHud(viewModel: MainViewModel) {
                 active = state.timerSeconds > 0,
                 contentDescription = stringResource(R.string.cd_timer),
                 onClick = { viewModel.cycleTimer() }
+            )
+            HudButton(
+                icon = Icons.Filled.Brightness2,
+                active = state.nightModeEnabled,
+                contentDescription = stringResource(R.string.cd_night_mode),
+                onClick = { viewModel.toggleNightMode() }
             )
         }
         Text("LENS", color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 4.sp, fontSize = 14.sp)

@@ -60,6 +60,7 @@ data class AppUiState(
     val shutterSpeedNs: Long = DEFAULT_SHUTTER_SPEED_NS,
     val shutterSpeedRange: LongRange = DEFAULT_SHUTTER_SPEED_NS..DEFAULT_SHUTTER_SPEED_NS,
     val manualExposureSupported: Boolean = false,
+    val nightModeEnabled: Boolean = false,
 
     val layoutIndex: Int = 3,
     val frameIndex: Int = 0,
@@ -208,6 +209,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setShutterSpeed(ns: Long) = _state.update { it.copy(shutterSpeedNs = ns.coerceIn(it.shutterSpeedRange)) }
 
+    /** A quick preset instead of a distinct capture mode: turns on manual exposure with a
+     *  slower shutter speed and boosted ISO to brighten low-light shots, and drops flash
+     *  since the point is to use a longer exposure instead of it. */
+    fun toggleNightMode() = _state.update {
+        if (it.nightModeEnabled) {
+            it.copy(nightModeEnabled = false, manualExposureEnabled = false, toast = str(R.string.toast_night_mode_off))
+        } else if (!it.manualExposureSupported) {
+            it.copy(toast = str(R.string.toast_manual_exposure_unsupported))
+        } else {
+            val nightShutterNs = (it.shutterSpeedRange.last / 4).coerceIn(it.shutterSpeedRange)
+            val nightIso = (it.isoRange.first + (it.isoRange.last - it.isoRange.first) * 3 / 4).coerceIn(it.isoRange)
+            it.copy(
+                nightModeEnabled = true,
+                manualExposureEnabled = true,
+                shutterSpeedNs = nightShutterNs,
+                isoValue = nightIso,
+                flashEnabled = false,
+                toast = str(R.string.toast_night_mode_on)
+            )
+        }
+    }
+
     fun selectLayout(index: Int) = _state.update {
         it.copy(layoutIndex = index, collageShots = emptyList())
     }
@@ -254,6 +277,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(flashHold = true) }
                 delay(450)
             }
+        }
+
+        // Manual shutter speed needs the sensor to actually settle at the new exposure
+        // before a still capture reflects it — re-push the setting and wait roughly one
+        // exposure cycle (capped so a multi-second shutter speed doesn't feel like a hang).
+        if (_state.value.manualExposureEnabled) {
+            cameraController?.setManualExposure(_state.value.isoValue, _state.value.shutterSpeedNs)
+            val settleMs = (_state.value.shutterSpeedNs / 1_000_000L).coerceIn(150L, 3000L)
+            delay(settleMs)
         }
 
         val matrix = _state.value.activeColorMatrix

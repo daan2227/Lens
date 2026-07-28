@@ -24,6 +24,7 @@
     <!-- Content descriptions -->
     <string name="cd_flash">Flash</string>
     <string name="cd_timer">Temporizador</string>
+    <string name="cd_night_mode">Modo noche</string>
     <string name="cd_grid">Cuadrícula</string>
     <string name="cd_flip_camera">Cambiar cámara</string>
     <string name="cd_gallery">Galería</string>
@@ -58,6 +59,8 @@
     <string name="toast_hdr_on">HDR activado</string>
     <string name="toast_hdr_off">HDR desactivado</string>
     <string name="toast_manual_exposure_unsupported">Exposición manual no disponible en este dispositivo</string>
+    <string name="toast_night_mode_on">Modo noche activado</string>
+    <string name="toast_night_mode_off">Modo noche desactivado</string>
     <string name="toast_hyperlapse_started">Grabando hyperlapse…</string>
     <string name="toast_hyperlapse_saved">Hyperlapse guardado en galería</string>
     <string name="toast_hyperlapse_too_short">Grabación demasiado corta, descartada</string>

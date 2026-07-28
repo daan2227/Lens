@@ -130,6 +130,11 @@ class CameraController(private val context: Context) {
             .setResolutionSelector(
                 ResolutionSelector.Builder()
                     .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                    // Sensors like Samsung's 50MP main camera only expose their true native
+                    // resolution through a separate "high resolution" stream configuration
+                    // list (slower per shot); the default mode only considers the regular
+                    // list, which tops out at the pixel-binned size (e.g. 12MP).
+                    .setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
                     .build()
             )
             .build()
